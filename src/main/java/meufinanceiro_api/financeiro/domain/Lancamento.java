@@ -11,9 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "lancamentos", uniqueConstraints = {
-        //@UniqueConstraint(name = "uk_lancamento_chave_nfce", columnNames = { "chave_nfce" })
-})
+@Table(name = "lancamentos", uniqueConstraints = { })
 @Getter
 @Setter
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)

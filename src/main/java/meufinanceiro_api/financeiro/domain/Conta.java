@@ -20,7 +20,7 @@ public class Conta {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 100)
+    @Column(nullable = false, length = 100, unique = true)
     private String nome;
 
     @Column(name = "saldo_inicial", precision = 19, scale = 2)

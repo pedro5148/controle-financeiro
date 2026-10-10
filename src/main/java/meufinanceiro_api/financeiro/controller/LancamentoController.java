@@ -8,6 +8,8 @@ import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.service.LancamentoService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,32 +22,33 @@ import java.util.List;
 @RequiredArgsConstructor
 public class LancamentoController {
 
-    private final LancamentoService service;
+    private final LancamentoService lancamentoService;
 
     @GetMapping
-    public ResponseEntity<Page<LancamentoResponseDTO>> listar(
+    public Page<LancamentoResponseDTO> listar(
             @RequestParam(required = false) String descricao,
             @RequestParam(required = false) TipoLancamento tipo,
             @RequestParam(required = false) Integer mes,
             @RequestParam(required = false) Integer ano,
-            Pageable pageable) {
-        return ResponseEntity.ok(service.listar(descricao, tipo, mes, ano, pageable));
+            @PageableDefault(sort = "dataEfetivacao", direction = Sort.Direction.DESC, size = 20) Pageable pageable) {
+
+        return lancamentoService.listar(descricao, tipo, mes, ano, pageable);
     }
 
     @PostMapping
     public ResponseEntity<List<LancamentoResponseDTO>> criar(@Valid @RequestBody LancamentoRequestDTO dto) {
-        List<LancamentoResponseDTO> criados = service.criarLancamentos(dto);
+        List<LancamentoResponseDTO> criados = lancamentoService.criarLancamentos(dto);
         return ResponseEntity.status(HttpStatus.CREATED).body(criados);
     }
 
     @PutMapping("/{id}")
     public LancamentoResponseDTO atualizar(@PathVariable Long id, @Valid @RequestBody LancamentoRequestDTO dto) {
-        return service.atualizar(id, dto);
+        return lancamentoService.atualizar(id, dto);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void excluir(@PathVariable Long id) {
-        service.excluir(id);
+        lancamentoService.excluir(id);
     }
 }

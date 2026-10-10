@@ -12,10 +12,7 @@ import java.util.List;
 
 @Repository
 public interface ContaRepository extends JpaRepository<Conta, Long> {
-    List<Conta> findByPadraoTrue();
-
-    @Query("SELECT COALESCE(SUM(c.saldoInicial), 0) FROM Conta c")
-    BigDecimal somarSaldosIniciais();
+    List<Conta> findAllByOrderByPadraoDescNomeAsc();
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Conta c SET c.saldoAtual = COALESCE(c.saldoAtual, 0) + :valor WHERE c.id = :contaId")
@@ -28,4 +25,6 @@ public interface ContaRepository extends JpaRepository<Conta, Long> {
     @Modifying
     @Query("UPDATE Conta c SET c.padrao = false WHERE c.padrao = true AND (:idIgnorar IS NULL OR c.id != :idIgnorar)")
     void removerFlagPadraoDeOutrasContas(@Param("idIgnorar") Long idIgnorar);
+
+    boolean existsByNomeIgnoreCase(String nome);
 }

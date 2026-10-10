@@ -4,7 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "subcategorias")
+@Table(name = "subcategorias", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_subcategoria_nome_categoria", columnNames = {"categoria_id", "nome"})
+})
 @Getter
 @Setter
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)

@@ -8,7 +8,6 @@ import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
 import meufinanceiro_api.financeiro.mapper.LancamentoMapper;
-import meufinanceiro_api.financeiro.repository.ContaRepository;
 import meufinanceiro_api.financeiro.repository.LancamentoRepository;
 import meufinanceiro_api.financeiro.repository.LancamentoSpecification;
 import meufinanceiro_api.financeiro.service.strategy.LancamentoStrategy;
@@ -24,28 +23,25 @@ import java.util.List;
 @RequiredArgsConstructor
 public class LancamentoService {
 
-    private final LancamentoRepository repository;
-    //private final FaturaService faturaService;
-    private final ContaRepository contaRepository;
-    //private final CategoriaRepository categoriaRepository;
-    //private final SubcategoriaRepository subcategoriaRepository;
-    private final LancamentoMapper mapper;
-    private final List<LancamentoStrategy> strategies;
+    private final LancamentoRepository lancamentoRepository;
+    private final LancamentoMapper lancamentoMapper;
+    private final List<LancamentoStrategy> lancamentoStrategies;
 
-    public Page<LancamentoResponseDTO> listar(String descricao,
+    public Page<LancamentoResponseDTO> listar(
+            String descricao,
             TipoLancamento tipo,
             Integer mes,
             Integer ano,
             Pageable pageable) {
         Specification<Lancamento> spec = LancamentoSpecification
                 .filtroAvancado(descricao, tipo, mes, ano);
-        Page<Lancamento> paginasEntidade = repository.findAll(spec, pageable);
-        return paginasEntidade.map(mapper::toResponseDTO);
+        Page<Lancamento> paginasEntidade = lancamentoRepository.findAll(spec, pageable);
+        return paginasEntidade.map(lancamentoMapper::toResponseDTO);
     }
 
     @Transactional
     public List<LancamentoResponseDTO> criarLancamentos(LancamentoRequestDTO dto) {
-        LancamentoStrategy strategy = strategies.stream()
+        LancamentoStrategy strategy = lancamentoStrategies.stream()
                 .filter(s -> s.isApplicable(dto))
                 .findFirst()
                 .orElseThrow(() -> new RegraNegocioException("Estratégia não suportada para o lançamento solicitado."));
@@ -54,10 +50,10 @@ public class LancamentoService {
 
     @Transactional
     public LancamentoResponseDTO atualizar(Long id, LancamentoRequestDTO dto) {
-        Lancamento existente = repository.findById(id)
+        Lancamento existente = lancamentoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado"));
 
-        LancamentoStrategy strategy = strategies.stream()
+        LancamentoStrategy strategy = lancamentoStrategies.stream()
                 .filter(s -> s.isApplicable(dto))
                 .findFirst()
                 .orElseThrow(() -> new RegraNegocioException("Estratégia não suportada para a atualização solicitada."));
@@ -67,10 +63,10 @@ public class LancamentoService {
 
     @Transactional
     public void excluir(Long id) {
-        Lancamento existente = repository.findById(id)
+        Lancamento existente = lancamentoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado para exclusão"));
 
-        LancamentoStrategy strategy = strategies.stream()
+        LancamentoStrategy strategy = lancamentoStrategies.stream()
                 .filter(s -> s.isApplicable(existente))
                 .findFirst()
                 .orElseThrow(() -> new RegraNegocioException("Estratégia não suportada para exclusão."));

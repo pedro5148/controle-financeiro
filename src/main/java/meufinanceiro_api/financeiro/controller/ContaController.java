@@ -1,6 +1,7 @@
 package meufinanceiro_api.financeiro.controller;
 
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import meufinanceiro_api.financeiro.dto.ContaRequestDTO;
 import meufinanceiro_api.financeiro.dto.ContaResponseDTO;
 import meufinanceiro_api.financeiro.service.ContaService;
@@ -12,13 +13,10 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/contas")
 @CrossOrigin(origins = "*")
+@RequiredArgsConstructor
 public class ContaController {
 
     private final ContaService service;
-
-    public ContaController(ContaService service){
-        this.service = service;
-    }
 
     @GetMapping
     public List<ContaResponseDTO> listarTodasAsContas() {

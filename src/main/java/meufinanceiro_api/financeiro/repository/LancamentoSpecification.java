@@ -27,11 +27,11 @@ public class LancamentoSpecification {
                 // Se enviou mês mas não enviou ano, assume o ano atual
                 int anoFiltro = (ano != null) ? ano : LocalDate.now().getYear();
                 YearMonth ym = YearMonth.of(anoFiltro, mes);
-                predicates.add(cb.between(root.get("dataLancamento"), ym.atDay(1), ym.atEndOfMonth()));
+                predicates.add(cb.between(root.get("dataLancamento"), ym.atDay(1), ym.atEndOfMonth())); //efetivacao?
             } else if (ano != null) {
                 LocalDate start = LocalDate.of(ano, 1, 1);
                 LocalDate end = LocalDate.of(ano, 12, 31);
-                predicates.add(cb.between(root.get("dataLancamento"), start, end));
+                predicates.add(cb.between(root.get("dataLancamento"), start, end)); //efetivacao?
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));

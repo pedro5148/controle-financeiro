@@ -13,7 +13,6 @@ import org.mapstruct.MappingTarget;
         ContaMapper.class,
         CategoriaMapper.class,
         SubcategoriaMapper.class
-        //LancamentoParceladoMapper.class
 })
 public interface LancamentoMapper {
 
@@ -25,7 +24,6 @@ public interface LancamentoMapper {
     @Mapping(target = "lancamentoParcelado", ignore = true)
     Lancamento toEntity(LancamentoRequestDTO dto);
 
-    //@Mapping(target = "nomeCartao", ignore = true)
     @Mapping(target = "parcelamento", source = "lancamentoParcelado")
     LancamentoResponseDTO toResponseDTO(Lancamento entity);
 

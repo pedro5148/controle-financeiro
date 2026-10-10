@@ -20,58 +20,68 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ContaService {
 
-    private final ContaRepository repository;
-    private final ContaMapper mapper;
+    private final ContaRepository contaRepository;
+    private final ContaMapper contaMapper;
     private final LancamentoRepository lancamentoRepository;
 
     public List<ContaResponseDTO> listarTodasAsContas() {
-        return repository.findAll().stream()
-                .map(mapper::toResponseDTO)
+        return contaRepository.findAllByOrderByPadraoDescNomeAsc().stream()
+                .map(contaMapper::toResponseDTO)
                 .collect(Collectors.toList());
     }
 
     @Transactional
     public ContaResponseDTO criar(ContaRequestDTO dto) {
-        Conta conta = mapper.toEntity(dto);
+        String nomeFormatado = dto.nome().trim();
+
+        if (contaRepository.existsByNomeIgnoreCase(nomeFormatado)){
+            throw new RegraNegocioException("Ja existe uma conta com o nome informado.");
+        }
+
+        Conta conta = contaMapper.toEntity(dto);
+        conta.setNome(nomeFormatado);
 
         BigDecimal saldoInicial = dto.saldoInicial() != null ? dto.saldoInicial() : BigDecimal.ZERO;
         conta.setSaldoInicial(saldoInicial);
         conta.setSaldoAtual(saldoInicial);
 
         if (conta.isPadrao()) {
-            repository.removerFlagPadraoDeOutrasContas(null);
+            contaRepository.removerFlagPadraoDeOutrasContas(null);
         }
 
-        return mapper.toResponseDTO(repository.save(conta));
+        return contaMapper.toResponseDTO(contaRepository.save(conta));
     }
 
     @Transactional
     public ContaResponseDTO atualizar(Long id, ContaRequestDTO dto) {
-        Conta existente = repository.findById(id)
+        Conta existente = contaRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Conta não encontrada."));
 
-        // Regra Crítica: Recálculo do Saldo Atual baseado na variação do Saldo Inicial
+        String novoNomeFormatado = dto.nome().trim();
+        if (!existente.getNome().equalsIgnoreCase(novoNomeFormatado) &&
+            contaRepository.existsByNomeIgnoreCase(novoNomeFormatado)){
+            throw new RegraNegocioException("Ja existe uma conta com o nome informado");
+        }
+
         BigDecimal novoSaldoInicial = dto.saldoInicial() != null ? dto.saldoInicial() : BigDecimal.ZERO;
         BigDecimal variacao = novoSaldoInicial.subtract(existente.getSaldoInicial());
 
-        // Aplica a diferença matemática no saldo atual (seja positiva ou negativa)
         existente.setSaldoAtual(existente.getSaldoAtual().add(variacao));
         existente.setSaldoInicial(novoSaldoInicial);
 
-        existente.setNome(dto.nome());
+        existente.setNome(novoNomeFormatado);
 
-        // Só aciona o banco se a conta atual estiver virando padrão agora
         if (dto.padrao() && !existente.isPadrao()) {
-            repository.removerFlagPadraoDeOutrasContas(id);
+            contaRepository.removerFlagPadraoDeOutrasContas(id);
         }
         existente.setPadrao(dto.padrao());
 
-        return mapper.toResponseDTO(repository.save(existente));
+        return contaMapper.toResponseDTO(contaRepository.save(existente));
     }
 
     @Transactional
     public void excluir(Long id) {
-        Conta existente = repository.findById(id)
+        Conta existente = contaRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Conta não encontrada para exclusão."));
 
         // Integridade Relacional
@@ -84,6 +94,6 @@ public class ContaService {
             throw new RegraNegocioException("Não é possível excluir a conta padrão. Defina outra conta como padrão antes de excluí-la.");
         }
 
-        repository.delete(existente);
+        contaRepository.delete(existente);
     }
 }

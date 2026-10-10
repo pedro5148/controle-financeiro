@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface SubcategoriaRepository extends JpaRepository<Subcategoria, Long> {
     List<Subcategoria> findByCategoriaId(Long categoriaId);
+    void deleteByCategoriaId(Long categoriaId);
+    boolean existsByCategoriaIdAndNomeIgnoreCase(Long categoriaId, String nome);
 }
