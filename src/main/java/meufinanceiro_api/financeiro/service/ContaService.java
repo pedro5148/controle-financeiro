@@ -45,7 +45,10 @@ public class ContaService {
         conta.setSaldoInicial(saldoInicial);
         conta.setSaldoAtual(saldoInicial);
 
-        if (conta.isPadrao()) {
+        boolean ehPadrao = Boolean.TRUE.equals(dto.padrao());
+        conta.setPadrao(ehPadrao);
+
+        if (ehPadrao) {
             contaRepository.removerFlagPadraoDeOutrasContas(null);
         }
 
@@ -63,18 +66,27 @@ public class ContaService {
             throw new RegraNegocioException("Ja existe uma conta com o nome informado");
         }
 
-        BigDecimal novoSaldoInicial = dto.saldoInicial() != null ? dto.saldoInicial() : BigDecimal.ZERO;
-        BigDecimal variacao = novoSaldoInicial.subtract(existente.getSaldoInicial());
+        if (dto.saldoInicial() != null) {
+            BigDecimal saldoInicialAntigo = existente.getSaldoInicial() != null ? existente.getSaldoInicial() : BigDecimal.ZERO;
+            BigDecimal saldoAtualAntigo = existente.getSaldoAtual() != null ? existente.getSaldoAtual() : BigDecimal.ZERO;
+            BigDecimal variacao = dto.saldoInicial().subtract(saldoInicialAntigo);
 
-        existente.setSaldoAtual(existente.getSaldoAtual().add(variacao));
-        existente.setSaldoInicial(novoSaldoInicial);
+            existente.setSaldoAtual(saldoAtualAntigo.add(variacao));
+            existente.setSaldoInicial(dto.saldoInicial());
+        }
 
         existente.setNome(novoNomeFormatado);
 
-        if (dto.padrao() && !existente.isPadrao()) {
-            contaRepository.removerFlagPadraoDeOutrasContas(id);
+        if (dto.padrao() != null) {
+            if (existente.isPadrao() && !dto.padrao()) {
+                throw new RegraNegocioException("Não é possível desmarcar a conta padrão. Defina outra conta como padrão para transferir essa configuração.");
+            }
+
+            if (dto.padrao() && !existente.isPadrao()) {
+                contaRepository.removerFlagPadraoDeOutrasContas(id);
+            }
+            existente.setPadrao(dto.padrao());
         }
-        existente.setPadrao(dto.padrao());
 
         return contaMapper.toResponseDTO(contaRepository.save(existente));
     }

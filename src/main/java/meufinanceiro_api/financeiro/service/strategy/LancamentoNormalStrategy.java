@@ -1,6 +1,5 @@
 package meufinanceiro_api.financeiro.service.strategy;
 
-import meufinanceiro_api.financeiro.domain.Conta;
 import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.enums.MeioPagamento;
@@ -20,19 +19,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
-public class LancamentoNormalStrategy extends AbstractLancamentoStrategy{
+public class LancamentoNormalStrategy extends AbstractLancamentoStrategy {
 
     public LancamentoNormalStrategy(LancamentoRepository repository,
-                                    ContaRepository contaRepository,
-                                    CategoriaRepository categoriaRepository,
-                                    SubcategoriaRepository subcategoriaRepository,
-                                    LancamentoMapper mapper) {
+            ContaRepository contaRepository,
+            CategoriaRepository categoriaRepository,
+            SubcategoriaRepository subcategoriaRepository,
+            LancamentoMapper mapper) {
         super(repository, contaRepository, categoriaRepository, subcategoriaRepository, mapper);
     }
 
     @Override
     public boolean isApplicable(LancamentoRequestDTO dto) {
-        // Se não for crédito, é um lançamento normal (dinheiro, débito, pix, transferência)
+        // Se não for crédito, é um lançamento normal (dinheiro, débito, pix,
+        // transferência)
         return dto.meioPagamento() != MeioPagamento.CREDITO;
     }
 
@@ -84,17 +84,18 @@ public class LancamentoNormalStrategy extends AbstractLancamentoStrategy{
             }
 
             if (salvo.getConta() == null || salvo.getConta().getId() == null) {
-                throw new RegraNegocioException("A conta de origem é obrigatória para despesas, receitas e transferências.");
+                throw new RegraNegocioException(
+                        "A conta de origem é obrigatória para despesas, receitas e transferências.");
             }
 
             Long contaOrigemId = salvo.getConta().getId();
             BigDecimal valor = salvo.getValor();
 
             if (salvo.getTipo() == TipoLancamento.RECEITA) {
-                //conta.setSaldoAtual(saldoAtual.add(salvo.getValor()));
+                // conta.setSaldoAtual(saldoAtual.add(salvo.getValor()));
                 contaRepository.creditarSaldo(contaOrigemId, valor);
             } else if (salvo.getTipo() == TipoLancamento.DESPESA) {
-                //conta.setSaldoAtual(saldoAtual.subtract(salvo.getValor()));
+                // conta.setSaldoAtual(saldoAtual.subtract(salvo.getValor()));
                 contaRepository.debitarSaldo(contaOrigemId, valor);
             } else if (salvo.getTipo() == TipoLancamento.TRANSFERENCIA) {
                 if (salvo.getContaDestino() == null || salvo.getContaDestino().getId() == null) {
@@ -128,7 +129,8 @@ public class LancamentoNormalStrategy extends AbstractLancamentoStrategy{
             case RECEITA -> contaRepository.debitarSaldo(contaId, valorAntigo);
             case TRANSFERENCIA -> {
                 contaRepository.creditarSaldo(contaId, valorAntigo); // Devolve para a origem
-                contaRepository.debitarSaldo(lancamentoAntigo.getContaDestino().getId(), valorAntigo); // Tira do destino
+                contaRepository.debitarSaldo(lancamentoAntigo.getContaDestino().getId(), valorAntigo); // Tira do
+                                                                                                       // destino
             }
         }
     }
@@ -162,8 +164,10 @@ public class LancamentoNormalStrategy extends AbstractLancamentoStrategy{
     }
 
     @Override
-    protected void posProcessarAtualizacao(Lancamento salvo, LancamentoRequestDTO dto) {  }
+    protected void posProcessarAtualizacao(Lancamento salvo, LancamentoRequestDTO dto) {
+    }
 
     @Override
-    protected void posProcessarExclusao(Lancamento lancamento) { }
+    protected void posProcessarExclusao(Lancamento lancamento) {
+    }
 }

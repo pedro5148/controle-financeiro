@@ -8,6 +8,6 @@ public record ContaRequestDTO(
         @NotBlank(message = "O nome da conta é obrigatório")
         String nome,
         BigDecimal saldoInicial,
-        boolean padrao
+        Boolean padrao
 ) {
 }
