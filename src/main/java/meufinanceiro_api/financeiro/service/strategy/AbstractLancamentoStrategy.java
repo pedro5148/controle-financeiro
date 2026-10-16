@@ -1,6 +1,7 @@
 package meufinanceiro_api.financeiro.service.strategy;
 
 import jakarta.persistence.EntityNotFoundException;
+import meufinanceiro_api.financeiro.domain.Conta;
 import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.domain.Subcategoria;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
@@ -81,15 +82,23 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
     protected abstract void posProcessarAtualizacao(Lancamento salvo, LancamentoRequestDTO dto);
     protected void preencherEntidadesComuns(Lancamento lancamento, LancamentoRequestDTO dto) {
         if (dto.contaId() != null) {
-            lancamento.setConta(contaRepository.findById(dto.contaId())
-                    .orElseThrow(() -> new EntityNotFoundException("Conta não encontrada")));
+            Conta conta = contaRepository.findById(dto.contaId())
+                    .orElseThrow(() -> new EntityNotFoundException("Conta não encontrada"));
+            if (!conta.isAtivo()) {
+                throw new RegraNegocioException("Não é possível realizar lançamentos em uma conta inativa.");
+            }
+            lancamento.setConta(conta);
         } else {
             lancamento.setConta(null);
         }
 
         if (dto.contaDestinoId() != null) {
-            lancamento.setContaDestino(contaRepository.findById(dto.contaDestinoId())
-                    .orElseThrow(() -> new EntityNotFoundException("Conta de destino não encontrada")));
+            Conta contaDestino = contaRepository.findById(dto.contaDestinoId())
+                    .orElseThrow(() -> new EntityNotFoundException("Conta de destino não encontrada"));
+            if (!contaDestino.isAtivo()) {
+                throw new RegraNegocioException("Não é possível realizar transferências para uma conta inativa.");
+            }
+            lancamento.setContaDestino(contaDestino);
         } else {
             lancamento.setContaDestino(null);
         }

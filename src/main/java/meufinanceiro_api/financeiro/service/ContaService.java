@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import meufinanceiro_api.financeiro.domain.Conta;
 import meufinanceiro_api.financeiro.dto.ContaRequestDTO;
 import meufinanceiro_api.financeiro.dto.ContaResponseDTO;
+import meufinanceiro_api.financeiro.dto.ContaResumoDTO;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
 import meufinanceiro_api.financeiro.mapper.ContaMapper;
 import meufinanceiro_api.financeiro.repository.ContaRepository;
@@ -24,10 +25,30 @@ public class ContaService {
     private final ContaMapper contaMapper;
     private final LancamentoRepository lancamentoRepository;
 
-    public List<ContaResponseDTO> listarTodasAsContas() {
-        return contaRepository.findAllByOrderByPadraoDescNomeAsc().stream()
+    @Transactional(readOnly = true)
+    public List<ContaResponseDTO> listarTodasAsContas(Boolean apenasAtivas) {
+        List<Conta> contas = Boolean.TRUE.equals(apenasAtivas)
+                ? contaRepository.findAllByAtivoTrueOrderByPadraoDescNomeAsc()
+                : contaRepository.findAllByOrderByPadraoDescNomeAsc();
+
+        return contas.stream()
                 .map(contaMapper::toResponseDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public ContaResponseDTO buscarPorId(Long id) {
+        return contaRepository.findById(id)
+                .map(contaMapper::toResponseDTO)
+                .orElseThrow(() -> new EntityNotFoundException("Conta não encontrada."));
+    }
+
+    @Transactional(readOnly = true)
+    public ContaResumoDTO obterResumoContas() {
+        BigDecimal saldoTotal = contaRepository.somarSaldoTotalContasAtivas();
+        long totalContas = contaRepository.count();
+        long totalContasAtivas = contaRepository.countByAtivoTrue();
+        return new ContaResumoDTO(saldoTotal, totalContas, totalContasAtivas);
     }
 
     @Transactional
@@ -45,10 +66,14 @@ public class ContaService {
         conta.setSaldoInicial(saldoInicial);
         conta.setSaldoAtual(saldoInicial);
 
-        boolean ehPadrao = Boolean.TRUE.equals(dto.padrao());
+        boolean ehPrimeiraConta = contaRepository.count() == 0;
+        boolean ehPadrao = ehPrimeiraConta || Boolean.TRUE.equals(dto.padrao());
         conta.setPadrao(ehPadrao);
 
-        if (ehPadrao) {
+        boolean ativo = dto.ativo() == null || dto.ativo();
+        conta.setAtivo(ativo);
+
+        if (ehPadrao && !ehPrimeiraConta) {
             contaRepository.removerFlagPadraoDeOutrasContas(null);
         }
 
@@ -61,9 +86,8 @@ public class ContaService {
                 .orElseThrow(() -> new EntityNotFoundException("Conta não encontrada."));
 
         String novoNomeFormatado = dto.nome().trim();
-        if (!existente.getNome().equalsIgnoreCase(novoNomeFormatado) &&
-            contaRepository.existsByNomeIgnoreCase(novoNomeFormatado)){
-            throw new RegraNegocioException("Ja existe uma conta com o nome informado");
+        if (contaRepository.existsByNomeIgnoreCaseAndIdNot(novoNomeFormatado, id)) {
+            throw new RegraNegocioException("Já existe uma conta com o nome informado.");
         }
 
         if (dto.saldoInicial() != null) {
@@ -88,7 +112,36 @@ public class ContaService {
             existente.setPadrao(dto.padrao());
         }
 
+        if (dto.ativo() != null) {
+            if (existente.isPadrao() && !dto.ativo()) {
+                throw new RegraNegocioException("Não é possível inativar a conta padrão. Defina outra conta como padrão antes de inativá-la.");
+            }
+            existente.setAtivo(dto.ativo());
+        }
+
         return contaMapper.toResponseDTO(contaRepository.save(existente));
+    }
+
+    @Transactional
+    public void inativar(Long id) {
+        Conta existente = contaRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Conta não encontrada."));
+
+        if (existente.isPadrao()) {
+            throw new RegraNegocioException("Não é possível inativar a conta padrão. Defina outra conta como padrão antes de inativá-la.");
+        }
+
+        existente.setAtivo(false);
+        contaRepository.save(existente);
+    }
+
+    @Transactional
+    public void ativar(Long id) {
+        Conta existente = contaRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Conta não encontrada."));
+
+        existente.setAtivo(true);
+        contaRepository.save(existente);
     }
 
     @Transactional

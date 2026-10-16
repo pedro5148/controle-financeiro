@@ -51,4 +51,16 @@ public class GlobalExceptionHandler {
 
         return new StandardError(400, "Erro de Payload", mensagemAmigavel, null);
     }
+
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public StandardError handleOptimisticLocking(org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+        return new StandardError(409, "Conflito de Concorrência", "Este registro foi alterado simultaneamente por outra transação. Recarregue os dados e tente novamente.", null);
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public StandardError handleDataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException ex) {
+        return new StandardError(400, "Violação de Integridade", "A operação não pode ser concluída pois o registro está vinculado a outros recursos do sistema.", null);
+    }
 }

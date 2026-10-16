@@ -9,7 +9,8 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface ContaMapper {
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "saldoAtual",  ignore = true)
+    @Mapping(target = "saldoAtual", ignore = true)
+    @Mapping(target = "versao", ignore = true)
     Conta toEntity(ContaRequestDTO dto);
     ContaResponseDTO toResponseDTO(Conta entity);
 }

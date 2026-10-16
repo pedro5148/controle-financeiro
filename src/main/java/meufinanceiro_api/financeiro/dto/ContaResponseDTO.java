@@ -9,6 +9,7 @@ public record ContaResponseDTO(
         BigDecimal saldoInicial,
         BigDecimal saldoAtual,
         LocalDate dataCriacao,
-        boolean padrao
+        boolean padrao,
+        boolean ativo
 ) {
 }
