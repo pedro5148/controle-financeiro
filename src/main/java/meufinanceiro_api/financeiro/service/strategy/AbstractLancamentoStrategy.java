@@ -1,6 +1,7 @@
 package meufinanceiro_api.financeiro.service.strategy;
 
 import jakarta.persistence.EntityNotFoundException;
+import meufinanceiro_api.financeiro.domain.Categoria;
 import meufinanceiro_api.financeiro.domain.Conta;
 import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.domain.Subcategoria;
@@ -104,8 +105,12 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
         }
 
         if (dto.categoriaId() != null) {
-            lancamento.setCategoria(categoriaRepository.findById(dto.categoriaId())
-                    .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada")));
+            Categoria categoria = categoriaRepository.findById(dto.categoriaId())
+                    .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada"));
+            if (!categoria.isAtivo()) {
+                throw new RegraNegocioException("Não é possível realizar lançamentos em uma categoria inativa.");
+            }
+            lancamento.setCategoria(categoria);
         } else {
             throw new RegraNegocioException("Categoria é obrigatória.");
         }

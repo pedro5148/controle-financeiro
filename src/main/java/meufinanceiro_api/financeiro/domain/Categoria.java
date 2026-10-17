@@ -23,6 +23,13 @@ public class Categoria {
     @Column(nullable = false, length = 100, unique = true)
     private String nome;
 
+    @Column(name = "ativo", columnDefinition = "boolean default true", nullable = false)
+    private boolean ativo = true;
+
+    @Version
+    private Long versao;
+
     @OneToMany(mappedBy = "categoria", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("nome ASC")
     private List<Subcategoria> subcategorias = new ArrayList<>();
 }

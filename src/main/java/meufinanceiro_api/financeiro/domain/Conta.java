@@ -39,7 +39,8 @@ public class Conta {
     private boolean ativo = true;
 
     @Version
-    private Long versao;
+    @Column(name = "versao", columnDefinition = "bigint default 0")
+    private Long versao = 0L;
 
     @PrePersist
     protected void onCreate() {

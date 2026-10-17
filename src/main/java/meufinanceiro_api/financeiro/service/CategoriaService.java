@@ -6,6 +6,7 @@ import meufinanceiro_api.financeiro.domain.Categoria;
 import meufinanceiro_api.financeiro.domain.Subcategoria;
 import meufinanceiro_api.financeiro.dto.CategoriaRequestDTO;
 import meufinanceiro_api.financeiro.dto.CategoriaResponseDTO;
+import meufinanceiro_api.financeiro.dto.CategoriaUpdateDTO;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
 import meufinanceiro_api.financeiro.mapper.CategoriaMapper;
 import meufinanceiro_api.financeiro.repository.CategoriaRepository;
@@ -26,10 +27,22 @@ public class CategoriaService {
     private final LancamentoRepository lancamentoRepository;
     private final CategoriaMapper categoriaMapper;
 
-    public List<CategoriaResponseDTO> listarTodasCategorias() {
-        return categoriaRepository.findAllByOrderByNomeAsc().stream()
+    @Transactional(readOnly = true)
+    public List<CategoriaResponseDTO> listarTodasCategorias(Boolean apenasAtivas) {
+        List<Categoria> categorias = Boolean.TRUE.equals(apenasAtivas)
+                ? categoriaRepository.findAllByAtivoTrueOrderByNomeAsc()
+                : categoriaRepository.findAllByOrderByNomeAsc();
+
+        return categorias.stream()
                 .map(categoriaMapper::toResponseDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public CategoriaResponseDTO buscarPorId(Long id) {
+        return categoriaRepository.findById(id)
+                .map(categoriaMapper::toResponseDTO)
+                .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada."));
     }
 
     @Transactional
@@ -42,6 +55,7 @@ public class CategoriaService {
 
         Categoria categoria = categoriaMapper.toEntity(dto);
         categoria.setNome(nomeFormatado);
+        categoria.setAtivo(true);
         Categoria categoriaSalva = categoriaRepository.save(categoria);
 
         if (dto.subcategoriaNome() != null && !dto.subcategoriaNome().trim().isEmpty()) {
@@ -49,20 +63,20 @@ public class CategoriaService {
             subcategoria.setCategoria(categoriaSalva);
             subcategoria.setNome(dto.subcategoriaNome().trim());
 
-            subcategoriaRepository.save(subcategoria);
+            Subcategoria subcategoriaSalva = subcategoriaRepository.save(subcategoria);
+            categoriaSalva.getSubcategorias().add(subcategoriaSalva);
         }
 
         return categoriaMapper.toResponseDTO(categoriaSalva);
     }
 
     @Transactional
-    public CategoriaResponseDTO atualizar(Long id, CategoriaRequestDTO dto) {
+    public CategoriaResponseDTO atualizar(Long id, CategoriaUpdateDTO dto) {
         Categoria existente = categoriaRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada."));
 
         String novoNomeFormatado = dto.nome().trim();
-        if (!existente.getNome().equalsIgnoreCase(novoNomeFormatado) &&
-                categoriaRepository.existsByNomeIgnoreCase(novoNomeFormatado)) {
+        if (categoriaRepository.existsByNomeIgnoreCaseAndIdNot(novoNomeFormatado, id)) {
             throw new RegraNegocioException("Já existe uma categoria com o nome informado.");
         }
 
@@ -71,17 +85,32 @@ public class CategoriaService {
     }
 
     @Transactional
+    public void inativar(Long id) {
+        Categoria existente = categoriaRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada."));
+
+        existente.setAtivo(false);
+        categoriaRepository.save(existente);
+    }
+
+    @Transactional
+    public void ativar(Long id) {
+        Categoria existente = categoriaRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada."));
+
+        existente.setAtivo(true);
+        categoriaRepository.save(existente);
+    }
+
+    @Transactional
     public void excluir(Long id) {
-        if (!categoriaRepository.existsById(id)) {
-            throw new EntityNotFoundException("Categoria não encontrada.");
-        }
+        Categoria existente = categoriaRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada."));
 
         if (lancamentoRepository.existsByCategoriaId(id)) {
             throw new RegraNegocioException("Não é possível excluir: A categoria possui lançamentos vinculados.");
         }
 
-        // DELETE FROM subcategorias WHERE categoria_id = ?
-        subcategoriaRepository.deleteByCategoriaId(id);
-        categoriaRepository.deleteById(id);
+        categoriaRepository.delete(existente);
     }
 }
