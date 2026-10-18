@@ -119,6 +119,10 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
             Subcategoria sub = subcategoriaRepository.findById(dto.subcategoriaId())
                     .orElseThrow(() -> new EntityNotFoundException("Subcategoria não encontrada"));
 
+            if (!sub.isAtivo()) {
+                throw new RegraNegocioException("Não é possível realizar lançamentos em uma subcategoria inativa.");
+            }
+
             if (!sub.getCategoria().getId().equals(dto.categoriaId())) {
                 throw new RegraNegocioException("A Subcategoria informada não pertence à Categoria selecionada.");
             }

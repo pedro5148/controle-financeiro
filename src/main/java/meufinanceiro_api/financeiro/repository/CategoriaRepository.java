@@ -16,9 +16,8 @@ public interface CategoriaRepository extends JpaRepository<Categoria, Long> {
     @EntityGraph(attributePaths = "subcategorias")
     List<Categoria> findAllByAtivoTrueOrderByNomeAsc();
 
-    @Override
     @EntityGraph(attributePaths = "subcategorias")
-    Optional<Categoria> findById(Long id);
+    Optional<Categoria> findWithSubcategoriasById(Long id);
 
     boolean existsByNomeIgnoreCase(String nome);
 

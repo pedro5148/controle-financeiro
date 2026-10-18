@@ -11,7 +11,6 @@ import meufinanceiro_api.financeiro.exception.RegraNegocioException;
 import meufinanceiro_api.financeiro.mapper.CategoriaMapper;
 import meufinanceiro_api.financeiro.repository.CategoriaRepository;
 import meufinanceiro_api.financeiro.repository.LancamentoRepository;
-import meufinanceiro_api.financeiro.repository.SubcategoriaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +22,6 @@ import java.util.stream.Collectors;
 public class CategoriaService {
 
     private final CategoriaRepository categoriaRepository;
-    private final SubcategoriaRepository subcategoriaRepository;
     private final LancamentoRepository lancamentoRepository;
     private final CategoriaMapper categoriaMapper;
 
@@ -40,39 +38,36 @@ public class CategoriaService {
 
     @Transactional(readOnly = true)
     public CategoriaResponseDTO buscarPorId(Long id) {
-        return categoriaRepository.findById(id)
+        return categoriaRepository.findWithSubcategoriasById(id)
                 .map(categoriaMapper::toResponseDTO)
                 .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada."));
     }
 
     @Transactional
-    public CategoriaResponseDTO criar(CategoriaRequestDTO dto)  {
-        String nomeFormatado = dto.nome().trim();
-
-        if (categoriaRepository.existsByNomeIgnoreCase(nomeFormatado)) {
+    public CategoriaResponseDTO criar(CategoriaRequestDTO dto) {
+        if (categoriaRepository.existsByNomeIgnoreCase(dto.nome())) {
             throw new RegraNegocioException("Já existe uma categoria com o nome informado.");
         }
 
         Categoria categoria = categoriaMapper.toEntity(dto);
-        categoria.setNome(nomeFormatado);
+        categoria.setNome(dto.nome());
         categoria.setAtivo(true);
-        Categoria categoriaSalva = categoriaRepository.save(categoria);
 
-        if (dto.subcategoriaNome() != null && !dto.subcategoriaNome().trim().isEmpty()) {
+        if (dto.subcategoriaNome() != null) {
             Subcategoria subcategoria = new Subcategoria();
-            subcategoria.setCategoria(categoriaSalva);
-            subcategoria.setNome(dto.subcategoriaNome().trim());
-
-            Subcategoria subcategoriaSalva = subcategoriaRepository.save(subcategoria);
-            categoriaSalva.getSubcategorias().add(subcategoriaSalva);
+            subcategoria.setCategoria(categoria);
+            subcategoria.setNome(dto.subcategoriaNome());
+            subcategoria.setAtivo(true);
+            categoria.getSubcategorias().add(subcategoria);
         }
 
+        Categoria categoriaSalva = categoriaRepository.save(categoria);
         return categoriaMapper.toResponseDTO(categoriaSalva);
     }
 
     @Transactional
     public CategoriaResponseDTO atualizar(Long id, CategoriaUpdateDTO dto) {
-        Categoria existente = categoriaRepository.findById(id)
+        Categoria existente = categoriaRepository.findWithSubcategoriasById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada."));
 
         String novoNomeFormatado = dto.nome().trim();

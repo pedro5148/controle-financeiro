@@ -27,7 +27,8 @@ public class Categoria {
     private boolean ativo = true;
 
     @Version
-    private Long versao;
+    @Column(name = "versao", columnDefinition = "bigint default 0")
+    private Long versao = 0L; 
 
     @OneToMany(mappedBy = "categoria", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("nome ASC")

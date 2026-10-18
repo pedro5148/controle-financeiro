@@ -8,7 +8,10 @@ import java.util.List;
 
 @Repository
 public interface SubcategoriaRepository extends JpaRepository<Subcategoria, Long> {
-    List<Subcategoria> findByCategoriaId(Long categoriaId);
-    void deleteByCategoriaId(Long categoriaId);
+    List<Subcategoria> findAllByOrderByNomeAsc();
+    List<Subcategoria> findAllByAtivoTrueOrderByNomeAsc();
+    List<Subcategoria> findAllByCategoriaIdOrderByNomeAsc(Long categoriaId);
+    List<Subcategoria> findAllByCategoriaIdAndAtivoTrueOrderByNomeAsc(Long categoriaId);
     boolean existsByCategoriaIdAndNomeIgnoreCase(Long categoriaId, String nome);
+    boolean existsByCategoriaIdAndNomeIgnoreCaseAndIdNot(Long categoriaId, String nome, Long id);
 }

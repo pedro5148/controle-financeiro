@@ -22,6 +22,9 @@ public class Subcategoria {
     @Column(nullable = false, length = 100)
     private String nome;
 
+    @Column(name = "ativo", columnDefinition = "boolean default true", nullable = false)
+    private boolean ativo = true;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = "categoria_id",
@@ -29,4 +32,8 @@ public class Subcategoria {
             foreignKey = @ForeignKey(name = "fk_subcategorias_categoria_id")
     )
     private Categoria categoria;
+
+    @Version
+    @Column(name = "versao", columnDefinition = "bigint default 0")
+    private Long versao = 0L;
 }
