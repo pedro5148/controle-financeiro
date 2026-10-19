@@ -30,7 +30,8 @@ public record LancamentoResponseDTO(
         // Dados de Recorrência e Parcelamento
         TipoRecorrencia tipoRecorrencia,
         Integer parcelaAtual,
-        LancamentoParceladoResponseDTO parcelamento,
+        Integer totalParcelas,
+        Long grupoParcelamentoId,
 
         // Soft Links com Módulo de Faturamento
         Long cartaoCreditoId,

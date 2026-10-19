@@ -83,11 +83,11 @@ public class Lancamento {
     @Column(name = "parcela_atual")
     private Integer parcelaAtual;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(
-            name = "lancamento_parcelado_id",
-            foreignKey = @ForeignKey(name = "fk_lancamentos_parcelados_id"))
-    private LancamentoParcelado lancamentoParcelado;
+    @Column(name = "total_parcelas")
+    private Integer totalParcelas;
+
+    @Column(name = "grupo_parcelamento_id")
+    private Long grupoParcelamentoId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "meio_pagamento", nullable = false)

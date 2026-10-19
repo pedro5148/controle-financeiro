@@ -48,4 +48,14 @@ public class Conta {
             this.dataCriacao = LocalDate.now();
         }
     }
+
+    public void creditar(BigDecimal valor) {
+        BigDecimal base = (this.saldoAtual != null) ? this.saldoAtual : BigDecimal.ZERO;
+        this.saldoAtual = base.add(valor);
+    }
+
+    public void debitar(BigDecimal valor) {
+        BigDecimal base = (this.saldoAtual != null) ? this.saldoAtual : BigDecimal.ZERO;
+        this.saldoAtual = base.subtract(valor);
+    }
 }

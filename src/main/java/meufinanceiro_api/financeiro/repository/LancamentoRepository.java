@@ -16,10 +16,10 @@ import java.util.List;
 @Repository
 public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, JpaSpecificationExecutor<Lancamento> {
 
-    @EntityGraph(attributePaths = { "conta", "contaDestino", "categoria", "subcategoria", "lancamentoParcelado" })
+    @EntityGraph(attributePaths = { "conta", "contaDestino", "categoria", "subcategoria" })
     Page<Lancamento> findAll(@Nullable Specification<Lancamento> spec, Pageable pageable);
 
-    @EntityGraph(attributePaths = { "conta", "contaDestino", "categoria", "subcategoria", "lancamentoParcelado" })
+    @EntityGraph(attributePaths = { "conta", "contaDestino", "categoria", "subcategoria" })
     Page<Lancamento> findAll(Pageable pageable);
 
     List<Lancamento> findByDataLancamentoBetween(LocalDate startDate, LocalDate endDate);

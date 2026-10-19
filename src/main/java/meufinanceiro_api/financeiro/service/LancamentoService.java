@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
+import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
 import meufinanceiro_api.financeiro.mapper.LancamentoMapper;
@@ -27,14 +28,20 @@ public class LancamentoService {
     private final LancamentoMapper lancamentoMapper;
     private final List<LancamentoStrategy> lancamentoStrategies;
 
+    @Transactional(readOnly = true)
     public Page<LancamentoResponseDTO> listar(
             String descricao,
             TipoLancamento tipo,
+            StatusLancamento status,
+            Long contaId,
+            Long categoriaId,
+            Long subcategoriaId,
+            Long grupoParcelamentoId,
             Integer mes,
             Integer ano,
             Pageable pageable) {
         Specification<Lancamento> spec = LancamentoSpecification
-                .filtroAvancado(descricao, tipo, mes, ano);
+                .filtroAvancado(descricao, tipo, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, mes, ano);
         Page<Lancamento> paginasEntidade = lancamentoRepository.findAll(spec, pageable);
         return paginasEntidade.map(lancamentoMapper::toResponseDTO);
     }

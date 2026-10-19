@@ -7,6 +7,9 @@ import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.domain.Subcategoria;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
+import meufinanceiro_api.financeiro.enums.StatusLancamento;
+import meufinanceiro_api.financeiro.enums.TipoLancamento;
+import meufinanceiro_api.financeiro.enums.TipoRecorrencia;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
 import meufinanceiro_api.financeiro.mapper.LancamentoMapper;
 import meufinanceiro_api.financeiro.repository.CategoriaRepository;
@@ -82,6 +85,28 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
     protected abstract Lancamento atualizarESalvarLancamento(Lancamento lancamento);
     protected abstract void posProcessarAtualizacao(Lancamento salvo, LancamentoRequestDTO dto);
     protected void preencherEntidadesComuns(Lancamento lancamento, LancamentoRequestDTO dto) {
+        // 1. Coerência entre status e dataEfetivacao
+        if (dto.status() == StatusLancamento.EFETIVADO) {
+            lancamento.setDataEfetivacao(dto.dataEfetivacao() != null ? dto.dataEfetivacao() : dto.dataLancamento());
+        } else {
+            lancamento.setDataEfetivacao(null);
+        }
+
+        // 2. Coerência de recorrência e parcelamento
+        if (dto.tipoRecorrencia() == TipoRecorrencia.PARCELADO) {
+            if (dto.quantidadeParcelas() == null || dto.quantidadeParcelas() <= 1) {
+                throw new RegraNegocioException("Para lançamentos parcelados, a quantidade de parcelas deve ser maior que 1.");
+            }
+            if (dto.tipoValorParcelamento() == null) {
+                throw new RegraNegocioException("Para lançamentos parcelados, informe se o valor corresponde ao VALOR_TOTAL ou VALOR_PARCELA.");
+            }
+        } else {
+            if (dto.quantidadeParcelas() != null || dto.tipoValorParcelamento() != null) {
+                throw new RegraNegocioException("A quantidade de parcelas e o tipo de valor do parcelamento só devem ser informados para lançamentos PARCELADOS.");
+            }
+        }
+
+        // 3. Conta de origem
         if (dto.contaId() != null) {
             Conta conta = contaRepository.findById(dto.contaId())
                     .orElseThrow(() -> new EntityNotFoundException("Conta não encontrada"));
@@ -93,7 +118,14 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
             lancamento.setConta(null);
         }
 
-        if (dto.contaDestinoId() != null) {
+        // 4. Coerência de Conta de destino conforme o tipo de lançamento
+        if (dto.tipo() == TipoLancamento.TRANSFERENCIA) {
+            if (dto.contaDestinoId() == null) {
+                throw new RegraNegocioException("A conta de destino é obrigatória para transferências.");
+            }
+            if (dto.contaDestinoId().equals(dto.contaId())) {
+                throw new RegraNegocioException("A conta de destino deve ser diferente da conta de origem.");
+            }
             Conta contaDestino = contaRepository.findById(dto.contaDestinoId())
                     .orElseThrow(() -> new EntityNotFoundException("Conta de destino não encontrada"));
             if (!contaDestino.isAtivo()) {
@@ -101,9 +133,13 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
             }
             lancamento.setContaDestino(contaDestino);
         } else {
+            if (dto.contaDestinoId() != null) {
+                throw new RegraNegocioException("A conta de destino só deve ser informada em lançamentos do tipo TRANSFERENCIA.");
+            }
             lancamento.setContaDestino(null);
         }
 
+        // 5. Categoria e Subcategoria
         if (dto.categoriaId() != null) {
             Categoria categoria = categoriaRepository.findById(dto.categoriaId())
                     .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada"));
@@ -151,7 +187,8 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
         copia.setObservacoes(base.getObservacoes());
         copia.setTipoRecorrencia(base.getTipoRecorrencia());
         copia.setParcelaAtual(base.getParcelaAtual());
-        copia.setLancamentoParcelado(base.getLancamentoParcelado());
+        copia.setTotalParcelas(base.getTotalParcelas());
+        copia.setGrupoParcelamentoId(base.getGrupoParcelamentoId());
         copia.setFaturaId(base.getFaturaId());
         copia.setCartaoCreditoId(base.getCartaoCreditoId());
         copia.setDocumentoFiscalId(base.getDocumentoFiscalId());

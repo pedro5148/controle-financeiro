@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
+import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.service.LancamentoService;
 import org.springframework.data.domain.Page;
@@ -28,11 +29,17 @@ public class LancamentoController {
     public Page<LancamentoResponseDTO> listar(
             @RequestParam(required = false) String descricao,
             @RequestParam(required = false) TipoLancamento tipo,
+            @RequestParam(required = false) StatusLancamento status,
+            @RequestParam(required = false) Long contaId,
+            @RequestParam(required = false) Long categoriaId,
+            @RequestParam(required = false) Long subcategoriaId,
+            @RequestParam(required = false) Long grupoParcelamentoId,
             @RequestParam(required = false) Integer mes,
             @RequestParam(required = false) Integer ano,
-            @PageableDefault(sort = "dataEfetivacao", direction = Sort.Direction.DESC, size = 20) Pageable pageable) {
+            @PageableDefault(sort = "dataLancamento", direction = Sort.Direction.DESC, size = 20) Pageable pageable) {
 
-        return lancamentoService.listar(descricao, tipo, mes, ano, pageable);
+        return lancamentoService.listar(
+                descricao, tipo, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, mes, ano, pageable);
     }
 
     @PostMapping

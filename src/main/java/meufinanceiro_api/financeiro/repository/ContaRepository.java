@@ -16,14 +16,6 @@ public interface ContaRepository extends JpaRepository<Conta, Long> {
     List<Conta> findAllByAtivoTrueOrderByPadraoDescNomeAsc();
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("UPDATE Conta c SET c.saldoAtual = COALESCE(c.saldoAtual, 0) + :valor WHERE c.id = :contaId")
-    void creditarSaldo(@Param("contaId") Long contaId, @Param("valor") BigDecimal valor);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("UPDATE Conta c SET c.saldoAtual = COALESCE(c.saldoAtual, 0) - :valor WHERE c.id = :contaId")
-    void debitarSaldo(@Param("contaId") Long contaId, @Param("valor") BigDecimal valor);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Conta c SET c.padrao = false WHERE c.padrao = true AND (:idIgnorar IS NULL OR c.id != :idIgnorar)")
     void removerFlagPadraoDeOutrasContas(@Param("idIgnorar") Long idIgnorar);
 
