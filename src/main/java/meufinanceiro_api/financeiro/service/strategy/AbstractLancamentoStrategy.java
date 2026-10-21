@@ -7,6 +7,7 @@ import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.domain.Subcategoria;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
+import meufinanceiro_api.financeiro.dto.LancamentoUpdateDTO;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.enums.TipoRecorrencia;
@@ -18,6 +19,7 @@ import meufinanceiro_api.financeiro.repository.LancamentoRepository;
 import meufinanceiro_api.financeiro.repository.SubcategoriaRepository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
@@ -51,15 +53,16 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
         return lancamentosSalvos.stream().map(mapper::toResponseDTO).toList();
     }
 
+    @Override
     @Transactional
-    public LancamentoResponseDTO atualizar(Lancamento lancamentoExistente, LancamentoRequestDTO dto) {
+    public LancamentoResponseDTO atualizar(Lancamento lancamentoExistente, LancamentoUpdateDTO dto) {
         // Fase 1: Estorno financeiro do estado atual (antes da mutação)
         reverterImpactoFinanceiro(lancamentoExistente);
 
-        // Fase 2: Mesclagem e validação dos novos dados
+        // Fase 2: Mesclagem e validação dos novos dados (preservando metadados de parcelamento)
         mapper.atualizarEntidade(dto, lancamentoExistente);
-        preencherEntidadesComuns(lancamentoExistente, dto);
-        preencherEntidadesEspecificas(lancamentoExistente, dto);
+        preencherEntidadesComunsAtualizacao(lancamentoExistente, dto);
+        preencherEntidadesEspecificasAtualizacao(lancamentoExistente, dto);
 
         // Fase 3: Efetivação do novo estado financeiro e persistência
         Lancamento salvo = atualizarESalvarLancamento(lancamentoExistente);
@@ -83,16 +86,10 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
     protected abstract void posProcessarExclusao(Lancamento lancamento);
     protected abstract void reverterImpactoFinanceiro(Lancamento lancamentoAntigo);
     protected abstract Lancamento atualizarESalvarLancamento(Lancamento lancamento);
-    protected abstract void posProcessarAtualizacao(Lancamento salvo, LancamentoRequestDTO dto);
-    protected void preencherEntidadesComuns(Lancamento lancamento, LancamentoRequestDTO dto) {
-        // 1. Coerência entre status e dataEfetivacao
-        if (dto.status() == StatusLancamento.EFETIVADO) {
-            lancamento.setDataEfetivacao(dto.dataEfetivacao() != null ? dto.dataEfetivacao() : dto.dataLancamento());
-        } else {
-            lancamento.setDataEfetivacao(null);
-        }
+    protected abstract void posProcessarAtualizacao(Lancamento salvo, LancamentoUpdateDTO dto);
 
-        // 2. Coerência de recorrência e parcelamento
+    protected void preencherEntidadesComuns(Lancamento lancamento, LancamentoRequestDTO dto) {
+        // Validação de recorrência e parcelamento (exclusiva da criação em lote)
         if (dto.tipoRecorrencia() == TipoRecorrencia.PARCELADO) {
             if (dto.quantidadeParcelas() == null || dto.quantidadeParcelas() <= 1) {
                 throw new RegraNegocioException("Para lançamentos parcelados, a quantidade de parcelas deve ser maior que 1.");
@@ -106,9 +103,54 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
             }
         }
 
-        // 3. Conta de origem
-        if (dto.contaId() != null) {
-            Conta conta = contaRepository.findById(dto.contaId())
+        preencherEntidadesBase(
+                lancamento,
+                dto.tipo(),
+                dto.status(),
+                dto.dataLancamento(),
+                dto.dataEfetivacao(),
+                dto.contaId(),
+                dto.contaDestinoId(),
+                dto.categoriaId(),
+                dto.subcategoriaId()
+        );
+    }
+
+    protected void preencherEntidadesComunsAtualizacao(Lancamento lancamento, LancamentoUpdateDTO dto) {
+        preencherEntidadesBase(
+                lancamento,
+                dto.tipo(),
+                dto.status(),
+                dto.dataLancamento(),
+                dto.dataEfetivacao(),
+                dto.contaId(),
+                dto.contaDestinoId(),
+                dto.categoriaId(),
+                dto.subcategoriaId()
+        );
+    }
+
+    private void preencherEntidadesBase(
+            Lancamento lancamento,
+            TipoLancamento tipo,
+            StatusLancamento status,
+            LocalDate dataLancamento,
+            LocalDate dataEfetivacao,
+            Long contaId,
+            Long contaDestinoId,
+            Long categoriaId,
+            Long subcategoriaId) {
+
+        // 1. Coerência entre status e dataEfetivacao
+        if (status == StatusLancamento.EFETIVADO) {
+            lancamento.setDataEfetivacao(dataEfetivacao != null ? dataEfetivacao : dataLancamento);
+        } else {
+            lancamento.setDataEfetivacao(null);
+        }
+
+        // 2. Conta de origem
+        if (contaId != null) {
+            Conta conta = contaRepository.findById(contaId)
                     .orElseThrow(() -> new EntityNotFoundException("Conta não encontrada"));
             if (!conta.isAtivo()) {
                 throw new RegraNegocioException("Não é possível realizar lançamentos em uma conta inativa.");
@@ -118,30 +160,30 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
             lancamento.setConta(null);
         }
 
-        // 4. Coerência de Conta de destino conforme o tipo de lançamento
-        if (dto.tipo() == TipoLancamento.TRANSFERENCIA) {
-            if (dto.contaDestinoId() == null) {
+        // 3. Coerência de Conta de destino conforme o tipo de lançamento
+        if (tipo == TipoLancamento.TRANSFERENCIA) {
+            if (contaDestinoId == null) {
                 throw new RegraNegocioException("A conta de destino é obrigatória para transferências.");
             }
-            if (dto.contaDestinoId().equals(dto.contaId())) {
+            if (contaDestinoId.equals(contaId)) {
                 throw new RegraNegocioException("A conta de destino deve ser diferente da conta de origem.");
             }
-            Conta contaDestino = contaRepository.findById(dto.contaDestinoId())
+            Conta contaDestino = contaRepository.findById(contaDestinoId)
                     .orElseThrow(() -> new EntityNotFoundException("Conta de destino não encontrada"));
             if (!contaDestino.isAtivo()) {
                 throw new RegraNegocioException("Não é possível realizar transferências para uma conta inativa.");
             }
             lancamento.setContaDestino(contaDestino);
         } else {
-            if (dto.contaDestinoId() != null) {
+            if (contaDestinoId != null) {
                 throw new RegraNegocioException("A conta de destino só deve ser informada em lançamentos do tipo TRANSFERENCIA.");
             }
             lancamento.setContaDestino(null);
         }
 
-        // 5. Categoria e Subcategoria
-        if (dto.categoriaId() != null) {
-            Categoria categoria = categoriaRepository.findById(dto.categoriaId())
+        // 4. Categoria e Subcategoria
+        if (categoriaId != null) {
+            Categoria categoria = categoriaRepository.findById(categoriaId)
                     .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada"));
             if (!categoria.isAtivo()) {
                 throw new RegraNegocioException("Não é possível realizar lançamentos em uma categoria inativa.");
@@ -151,15 +193,15 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
             throw new RegraNegocioException("Categoria é obrigatória.");
         }
 
-        if (dto.subcategoriaId() != null) {
-            Subcategoria sub = subcategoriaRepository.findById(dto.subcategoriaId())
+        if (subcategoriaId != null) {
+            Subcategoria sub = subcategoriaRepository.findById(subcategoriaId)
                     .orElseThrow(() -> new EntityNotFoundException("Subcategoria não encontrada"));
 
             if (!sub.isAtivo()) {
                 throw new RegraNegocioException("Não é possível realizar lançamentos em uma subcategoria inativa.");
             }
 
-            if (!sub.getCategoria().getId().equals(dto.categoriaId())) {
+            if (!sub.getCategoria().getId().equals(categoriaId)) {
                 throw new RegraNegocioException("A Subcategoria informada não pertence à Categoria selecionada.");
             }
             lancamento.setSubcategoria(sub);
@@ -167,7 +209,9 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
             lancamento.setSubcategoria(null);
         }
     }
+
     protected abstract void preencherEntidadesEspecificas(Lancamento lancamento, LancamentoRequestDTO dto);
+    protected abstract void preencherEntidadesEspecificasAtualizacao(Lancamento lancamento, LancamentoUpdateDTO dto);
     protected abstract void posProcessar(List<Lancamento> lancamentosSalvos);
     protected abstract List<Lancamento> gerarESalvarLancamentos(Lancamento lancamentoBase, LancamentoRequestDTO dto);
     protected Lancamento copiarLancamento(Lancamento base) {

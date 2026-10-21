@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
+import meufinanceiro_api.financeiro.dto.LancamentoUpdateDTO;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.service.LancamentoService;
@@ -42,6 +43,11 @@ public class LancamentoController {
                 descricao, tipo, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, mes, ano, pageable);
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<LancamentoResponseDTO> buscarPorId(@PathVariable Long id) {
+        return ResponseEntity.ok(lancamentoService.buscarPorId(id));
+    }
+
     @PostMapping
     public ResponseEntity<List<LancamentoResponseDTO>> criar(@Valid @RequestBody LancamentoRequestDTO dto) {
         List<LancamentoResponseDTO> criados = lancamentoService.criarLancamentos(dto);
@@ -49,8 +55,10 @@ public class LancamentoController {
     }
 
     @PutMapping("/{id}")
-    public LancamentoResponseDTO atualizar(@PathVariable Long id, @Valid @RequestBody LancamentoRequestDTO dto) {
-        return lancamentoService.atualizar(id, dto);
+    public ResponseEntity<LancamentoResponseDTO> atualizar(
+            @PathVariable Long id,
+            @Valid @RequestBody LancamentoUpdateDTO dto) {
+        return ResponseEntity.ok(lancamentoService.atualizar(id, dto));
     }
 
     @DeleteMapping("/{id}")

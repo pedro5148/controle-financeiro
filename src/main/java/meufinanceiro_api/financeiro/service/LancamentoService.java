@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
+import meufinanceiro_api.financeiro.dto.LancamentoUpdateDTO;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
@@ -46,6 +47,13 @@ public class LancamentoService {
         return paginasEntidade.map(lancamentoMapper::toResponseDTO);
     }
 
+    @Transactional(readOnly = true)
+    public LancamentoResponseDTO buscarPorId(Long id) {
+        return lancamentoRepository.findById(id)
+                .map(lancamentoMapper::toResponseDTO)
+                .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado."));
+    }
+
     @Transactional
     public List<LancamentoResponseDTO> criarLancamentos(LancamentoRequestDTO dto) {
         LancamentoStrategy strategy = lancamentoStrategies.stream()
@@ -56,12 +64,12 @@ public class LancamentoService {
     }
 
     @Transactional
-    public LancamentoResponseDTO atualizar(Long id, LancamentoRequestDTO dto) {
+    public LancamentoResponseDTO atualizar(Long id, LancamentoUpdateDTO dto) {
         Lancamento existente = lancamentoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado"));
 
         LancamentoStrategy strategy = lancamentoStrategies.stream()
-                .filter(s -> s.isApplicable(dto))
+                .filter(s -> s.isApplicable(existente) && s.isApplicable(dto))
                 .findFirst()
                 .orElseThrow(() -> new RegraNegocioException("Estratégia não suportada para a atualização solicitada."));
 

@@ -2,6 +2,7 @@ package meufinanceiro_api.financeiro.service.strategy;
 
 import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
+import meufinanceiro_api.financeiro.dto.LancamentoUpdateDTO;
 import meufinanceiro_api.financeiro.enums.MeioPagamento;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
@@ -39,18 +40,32 @@ public class LancamentoNormalStrategy extends AbstractLancamentoStrategy {
     }
 
     @Override
+    public boolean isApplicable(LancamentoUpdateDTO dto) {
+        return dto.meioPagamento() != MeioPagamento.CREDITO;
+    }
+
+    @Override
     public boolean isApplicable(Lancamento lancamento) {
         return lancamento.getMeioPagamento() != MeioPagamento.CREDITO;
     }
 
     @Override
     protected void preencherEntidadesEspecificas(Lancamento lancamento, LancamentoRequestDTO dto) {
+        validarEPreencherRegrasNormais(lancamento, dto.cartaoCreditoId());
+    }
+
+    @Override
+    protected void preencherEntidadesEspecificasAtualizacao(Lancamento lancamento, LancamentoUpdateDTO dto) {
+        validarEPreencherRegrasNormais(lancamento, dto.cartaoCreditoId());
+    }
+
+    private void validarEPreencherRegrasNormais(Lancamento lancamento, Long cartaoCreditoId) {
         if (lancamento.getConta() == null || lancamento.getConta().getId() == null) {
             throw new RegraNegocioException(
                     "A conta de origem é obrigatória para lançamentos que não sejam no cartão de crédito.");
         }
 
-        if (dto.cartaoCreditoId() != null) {
+        if (cartaoCreditoId != null) {
             throw new RegraNegocioException(
                     "O cartão de crédito só deve ser informado quando o meio de pagamento for CREDITO.");
         }
@@ -183,7 +198,7 @@ public class LancamentoNormalStrategy extends AbstractLancamentoStrategy {
     }
 
     @Override
-    protected void posProcessarAtualizacao(Lancamento salvo, LancamentoRequestDTO dto) {
+    protected void posProcessarAtualizacao(Lancamento salvo, LancamentoUpdateDTO dto) {
     }
 
     @Override

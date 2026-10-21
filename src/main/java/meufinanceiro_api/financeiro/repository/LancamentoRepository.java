@@ -12,9 +12,13 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, JpaSpecificationExecutor<Lancamento> {
+
+    @EntityGraph(attributePaths = { "conta", "contaDestino", "categoria", "subcategoria" })
+    Optional<Lancamento> findById(Long id);
 
     @EntityGraph(attributePaths = { "conta", "contaDestino", "categoria", "subcategoria" })
     Page<Lancamento> findAll(@Nullable Specification<Lancamento> spec, Pageable pageable);
