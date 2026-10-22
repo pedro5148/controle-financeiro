@@ -71,12 +71,25 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
         return mapper.toResponseDTO(salvo);
     }
 
+    @Override
     @Transactional
-    public void excluir(Lancamento lancamento) {
+    public void excluir(Lancamento lancamento, boolean excluirPendentesDoGrupo) {
         // 1: Devolve o dinheiro para a conta (Se estava efetivado)
         reverterImpactoFinanceiro(lancamento);
 
-        // 2: Remove do banco de dados
+        // 2: Se solicitado e fizer parte de um parcelamento, remove todas as demais parcelas PENDENTES do mesmo grupo
+        if (excluirPendentesDoGrupo && lancamento.getGrupoParcelamentoId() != null) {
+            List<Lancamento> pendentesDoGrupo = repository.findByGrupoParcelamentoIdAndStatusAndIdNot(
+                    lancamento.getGrupoParcelamentoId(),
+                    StatusLancamento.PENDENTE,
+                    lancamento.getId()
+            );
+            if (!pendentesDoGrupo.isEmpty()) {
+                repository.deleteAll(pendentesDoGrupo);
+            }
+        }
+
+        // 3: Remove o lançamento alvo do banco de dados
         repository.delete(lancamento);
         repository.flush();
 

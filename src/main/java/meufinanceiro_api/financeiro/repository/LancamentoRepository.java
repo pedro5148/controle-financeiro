@@ -2,6 +2,7 @@ package meufinanceiro_api.financeiro.repository;
 
 import jakarta.annotation.Nullable;
 import meufinanceiro_api.financeiro.domain.Lancamento;
+import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -27,6 +28,15 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
     Page<Lancamento> findAll(Pageable pageable);
 
     List<Lancamento> findByDataLancamentoBetween(LocalDate startDate, LocalDate endDate);
+
+    List<Lancamento> findByGrupoParcelamentoIdAndStatusAndIdNot(
+            Long grupoParcelamentoId,
+            StatusLancamento status,
+            Long id);
+
+    Optional<Lancamento> findFirstByGrupoParcelamentoIdAndStatus(
+            Long grupoParcelamentoId,
+            StatusLancamento status);
 
     boolean existsByCategoriaId(Long categoriaId);
 

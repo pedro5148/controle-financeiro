@@ -1,0 +1,21 @@
+services:
+  meufinanceiro-api:
+    container_name: meufinanceiro-api
+    image: meufinanceiro-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    volumes:
+      - type: bind
+        source: ./.env
+        target: /app/.env
+        read_only: true
+    restart: unless-stopped
+    networks:
+      - meufinanceiro-network
+
+networks:
+  meufinanceiro-network:
+    driver: bridge

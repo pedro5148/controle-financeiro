@@ -66,26 +66,37 @@ public class LancamentoService {
     @Transactional
     public LancamentoResponseDTO atualizar(Long id, LancamentoUpdateDTO dto) {
         Lancamento existente = lancamentoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado."));
 
         LancamentoStrategy strategy = lancamentoStrategies.stream()
-                .filter(s -> s.isApplicable(existente) && s.isApplicable(dto))
+                .filter(s -> s.isApplicable(existente))
                 .findFirst()
-                .orElseThrow(() -> new RegraNegocioException("Estratégia não suportada para a atualização solicitada."));
+                .orElseThrow(() -> new RegraNegocioException("Estratégia não suportada para o lançamento original."));
+
+        if (!strategy.isApplicable(dto)) {
+            throw new RegraNegocioException(
+                    "Não é permitido alterar o meio de pagamento de um lançamento normal para cartão de crédito (ou vice-versa). Exclua o lançamento e crie um novo.");
+        }
 
         return strategy.atualizar(existente, dto);
     }
 
     @Transactional
-    public void excluir(Long id) {
+    public void excluir(Long id, boolean excluirPendentesDoGrupo) {
         Lancamento existente = lancamentoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado para exclusão"));
+                .orElseGet(() -> {
+                    if (excluirPendentesDoGrupo) {
+                        return lancamentoRepository.findFirstByGrupoParcelamentoIdAndStatus(id, StatusLancamento.PENDENTE)
+                                .orElseThrow(() -> new EntityNotFoundException("Lançamento ou grupo de parcelas pendentes não encontrado para exclusão."));
+                    }
+                    throw new EntityNotFoundException("Lançamento não encontrado para exclusão.");
+                });
 
         LancamentoStrategy strategy = lancamentoStrategies.stream()
                 .filter(s -> s.isApplicable(existente))
                 .findFirst()
                 .orElseThrow(() -> new RegraNegocioException("Estratégia não suportada para exclusão."));
 
-        strategy.excluir(existente);
+        strategy.excluir(existente, excluirPendentesDoGrupo);
     }
 }
