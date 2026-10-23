@@ -74,19 +74,12 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
     @Override
     @Transactional
     public void excluir(Lancamento lancamento, boolean excluirPendentesDoGrupo) {
-        // 1: Devolve o dinheiro para a conta (Se estava efetivado)
+        // 1: Reverte o impacto financeiro (devolve saldo na conta ou subtrai valor da fatura aberta)
         reverterImpactoFinanceiro(lancamento);
 
         // 2: Se solicitado e fizer parte de um parcelamento, remove todas as demais parcelas PENDENTES do mesmo grupo
         if (excluirPendentesDoGrupo && lancamento.getGrupoParcelamentoId() != null) {
-            List<Lancamento> pendentesDoGrupo = repository.findByGrupoParcelamentoIdAndStatusAndIdNot(
-                    lancamento.getGrupoParcelamentoId(),
-                    StatusLancamento.PENDENTE,
-                    lancamento.getId()
-            );
-            if (!pendentesDoGrupo.isEmpty()) {
-                repository.deleteAll(pendentesDoGrupo);
-            }
+            excluirDemaisParcelasPendentesDoGrupo(lancamento);
         }
 
         // 3: Remove o lançamento alvo do banco de dados
@@ -94,6 +87,20 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
         repository.flush();
 
         posProcessarExclusao(lancamento);
+    }
+
+    protected void excluirDemaisParcelasPendentesDoGrupo(Lancamento lancamentoAlvo) {
+        List<Lancamento> pendentesDoGrupo = repository.findByGrupoParcelamentoIdAndStatusAndIdNot(
+                lancamentoAlvo.getGrupoParcelamentoId(),
+                StatusLancamento.PENDENTE,
+                lancamentoAlvo.getId()
+        );
+        if (!pendentesDoGrupo.isEmpty()) {
+            for (Lancamento pendente : pendentesDoGrupo) {
+                reverterImpactoFinanceiro(pendente);
+            }
+            repository.deleteAll(pendentesDoGrupo);
+        }
     }
 
     protected abstract void posProcessarExclusao(Lancamento lancamento);

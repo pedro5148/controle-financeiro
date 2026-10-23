@@ -39,12 +39,14 @@ public class LancamentoController {
             @RequestParam(required = false) Long categoriaId,
             @RequestParam(required = false) Long subcategoriaId,
             @RequestParam(required = false) Long grupoParcelamentoId,
+            @RequestParam(required = false) Long cartaoCreditoId,
+            @RequestParam(required = false) Long faturaId,
             @RequestParam(required = false) Integer mes,
             @RequestParam(required = false) Integer ano,
             @PageableDefault(sort = "dataLancamento", direction = Sort.Direction.DESC, size = 20) Pageable pageable) {
 
         return ResponseEntity.ok(lancamentoService.listar(
-                descricao, tipo, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, mes, ano, pageable));
+                descricao, tipo, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, cartaoCreditoId, faturaId, mes, ano, pageable));
     }
 
     @Operation(summary = "Buscar lançamento por ID", description = "Retorna os detalhes de um lançamento específico informado pelo seu identificador único.")

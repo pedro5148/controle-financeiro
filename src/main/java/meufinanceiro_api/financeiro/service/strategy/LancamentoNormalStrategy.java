@@ -60,6 +60,16 @@ public class LancamentoNormalStrategy extends AbstractLancamentoStrategy {
     }
 
     private void validarEPreencherRegrasNormais(Lancamento lancamento, Long cartaoCreditoId) {
+        if (lancamento.getDataVencimento() == null) {
+            throw new RegraNegocioException(
+                    "A data de vencimento é obrigatória para lançamentos que não sejam no cartão de crédito.");
+        }
+
+        if (lancamento.getStatus() == null) {
+            throw new RegraNegocioException(
+                    "O status é obrigatório para lançamentos que não sejam no cartão de crédito.");
+        }
+
         if (lancamento.getConta() == null || lancamento.getConta().getId() == null) {
             throw new RegraNegocioException(
                     "A conta de origem é obrigatória para lançamentos que não sejam no cartão de crédito.");

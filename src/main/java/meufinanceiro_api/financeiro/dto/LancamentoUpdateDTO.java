@@ -35,11 +35,11 @@ public record LancamentoUpdateDTO(
 
         @NotNull(message = "A data de lançamento é obrigatória")
         LocalDate dataLancamento,
-        @NotNull(message = "A data de vencimento é obrigatória")
+        // Obrigatório apenas para lançamentos normais; no cartão de crédito assume o vencimento da fatura
         LocalDate dataVencimento,
         LocalDate dataEfetivacao,
 
-        @NotNull(message = "O status é obrigatório")
+        // Obrigatório apenas para lançamentos normais; no cartão de crédito permanece PENDENTE até o pagamento da fatura
         StatusLancamento status,
 
         String observacoes,

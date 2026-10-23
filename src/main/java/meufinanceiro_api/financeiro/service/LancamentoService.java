@@ -38,11 +38,13 @@ public class LancamentoService {
             Long categoriaId,
             Long subcategoriaId,
             Long grupoParcelamentoId,
+            Long cartaoCreditoId,
+            Long faturaId,
             Integer mes,
             Integer ano,
             Pageable pageable) {
         Specification<Lancamento> spec = LancamentoSpecification
-                .filtroAvancado(descricao, tipo, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, mes, ano);
+                .filtroAvancado(descricao, tipo, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, cartaoCreditoId, faturaId, mes, ano);
         Page<Lancamento> paginasEntidade = lancamentoRepository.findAll(spec, pageable);
         return paginasEntidade.map(lancamentoMapper::toResponseDTO);
     }

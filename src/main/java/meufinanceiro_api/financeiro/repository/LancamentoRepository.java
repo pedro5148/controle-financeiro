@@ -45,4 +45,6 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
     boolean existsByContaId(Long contaId);
 
     boolean existsByContaDestinoId(Long contaDestinoId);
+
+    boolean existsByCartaoCreditoId(Long cartaoCreditoId);
 }

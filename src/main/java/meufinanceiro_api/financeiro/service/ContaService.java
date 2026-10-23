@@ -2,6 +2,7 @@ package meufinanceiro_api.financeiro.service;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import meufinanceiro_api.faturamento.repository.CartaoCreditoRepository;
 import meufinanceiro_api.financeiro.domain.Conta;
 import meufinanceiro_api.financeiro.dto.ContaRequestDTO;
 import meufinanceiro_api.financeiro.dto.ContaResponseDTO;
@@ -24,6 +25,7 @@ public class ContaService {
     private final ContaRepository contaRepository;
     private final ContaMapper contaMapper;
     private final LancamentoRepository lancamentoRepository;
+    private final CartaoCreditoRepository cartaoCreditoRepository;
 
     @Transactional(readOnly = true)
     public List<ContaResponseDTO> listarTodasAsContas(Boolean apenasAtivas) {
@@ -152,6 +154,10 @@ public class ContaService {
         // Integridade Relacional
         if (lancamentoRepository.existsByContaId(id) || lancamentoRepository.existsByContaDestinoId(id)) {
             throw new RegraNegocioException("Não é possível excluir a conta, pois existem lançamentos financeiros vinculados a ela.");
+        }
+
+        if (cartaoCreditoRepository.existsByContaPadraoId(id)) {
+            throw new RegraNegocioException("Não é possível excluir a conta, pois ela está configurada como conta padrão de um cartão de crédito.");
         }
 
         // Regra de Negócio

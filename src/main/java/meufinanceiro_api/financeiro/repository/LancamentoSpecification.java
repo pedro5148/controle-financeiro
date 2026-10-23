@@ -1,11 +1,12 @@
 package meufinanceiro_api.financeiro.repository;
 
+import jakarta.persistence.criteria.Predicate;
 import meufinanceiro_api.financeiro.domain.Lancamento;
+import meufinanceiro_api.financeiro.enums.MeioPagamento;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
 import org.springframework.data.jpa.domain.Specification;
-import jakarta.persistence.criteria.Predicate;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -21,6 +22,8 @@ public class LancamentoSpecification {
             Long categoriaId,
             Long subcategoriaId,
             Long grupoParcelamentoId,
+            Long cartaoCreditoId,
+            Long faturaId,
             Integer mes,
             Integer ano) {
 
@@ -59,15 +62,36 @@ public class LancamentoSpecification {
                 predicates.add(cb.equal(root.get("grupoParcelamentoId"), grupoParcelamentoId));
             }
 
-            if (mes != null) {
-                // Se enviou mês mas não enviou ano, assume o ano atual
-                int anoFiltro = (ano != null) ? ano : LocalDate.now().getYear();
-                YearMonth ym = YearMonth.of(anoFiltro, mes);
-                predicates.add(cb.between(root.get("dataLancamento"), ym.atDay(1), ym.atEndOfMonth()));
-            } else if (ano != null) {
-                LocalDate start = LocalDate.of(ano, 1, 1);
-                LocalDate end = LocalDate.of(ano, 12, 31);
-                predicates.add(cb.between(root.get("dataLancamento"), start, end));
+            if (cartaoCreditoId != null) {
+                predicates.add(cb.equal(root.get("cartaoCreditoId"), cartaoCreditoId));
+            }
+
+            if (faturaId != null) {
+                predicates.add(cb.equal(root.get("faturaId"), faturaId));
+            }
+
+            if (mes != null || ano != null) {
+                LocalDate start;
+                LocalDate end;
+                if (mes != null) {
+                    int anoFiltro = (ano != null) ? ano : LocalDate.now().getYear();
+                    YearMonth ym = YearMonth.of(anoFiltro, mes);
+                    start = ym.atDay(1);
+                    end = ym.atEndOfMonth();
+                } else {
+                    start = LocalDate.of(ano, 1, 1);
+                    end = LocalDate.of(ano, 12, 31);
+                }
+
+                Predicate filtroCreditoPorVencimento = cb.and(
+                        cb.equal(root.get("meioPagamento"), MeioPagamento.CREDITO),
+                        cb.between(root.get("dataVencimento"), start, end)
+                );
+                Predicate filtroNormalPorLancamento = cb.and(
+                        cb.notEqual(root.get("meioPagamento"), MeioPagamento.CREDITO),
+                        cb.between(root.get("dataLancamento"), start, end)
+                );
+                predicates.add(cb.or(filtroCreditoPorVencimento, filtroNormalPorLancamento));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));
