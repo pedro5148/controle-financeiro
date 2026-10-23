@@ -3,16 +3,13 @@ set -eu
 
 ENV_FILE="/app/.env"
 
-if [ ! -f "$ENV_FILE" ]; then
-    echo "Erro: arquivo .env não encontrado."
-    exit 1
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    . "$ENV_FILE"
+    set +a
+else
+    echo "Utilizando configuracoes do ambiente."
 fi
-
-echo "Carregando variáveis de ambiente..."
-
-set -a
-. "$ENV_FILE"
-set +a
 
 echo "Iniciando MeuFinanceiro API..."
 

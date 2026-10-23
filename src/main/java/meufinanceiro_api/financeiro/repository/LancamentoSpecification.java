@@ -17,6 +17,7 @@ public class LancamentoSpecification {
     public static Specification<Lancamento> filtroAvancado(
             String descricao,
             TipoLancamento tipo,
+            MeioPagamento meioPagamento,
             StatusLancamento status,
             Long contaId,
             Long categoriaId,
@@ -40,6 +41,10 @@ public class LancamentoSpecification {
 
             if (tipo != null) {
                 predicates.add(cb.equal(root.get("tipo"), tipo));
+            }
+
+            if (meioPagamento != null) {
+                predicates.add(cb.equal(root.get("meioPagamento"), meioPagamento));
             }
 
             if (status != null) {

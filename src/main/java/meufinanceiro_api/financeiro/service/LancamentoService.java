@@ -6,6 +6,7 @@ import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoUpdateDTO;
+import meufinanceiro_api.financeiro.enums.MeioPagamento;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
@@ -33,6 +34,7 @@ public class LancamentoService {
     public Page<LancamentoResponseDTO> listar(
             String descricao,
             TipoLancamento tipo,
+            MeioPagamento meioPagamento,
             StatusLancamento status,
             Long contaId,
             Long categoriaId,
@@ -44,7 +46,7 @@ public class LancamentoService {
             Integer ano,
             Pageable pageable) {
         Specification<Lancamento> spec = LancamentoSpecification
-                .filtroAvancado(descricao, tipo, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, cartaoCreditoId, faturaId, mes, ano);
+                .filtroAvancado(descricao, tipo, meioPagamento, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, cartaoCreditoId, faturaId, mes, ano);
         Page<Lancamento> paginasEntidade = lancamentoRepository.findAll(spec, pageable);
         return paginasEntidade.map(lancamentoMapper::toResponseDTO);
     }

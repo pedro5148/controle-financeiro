@@ -48,16 +48,13 @@ public class CartaoCreditoService {
 
     @Transactional
     public CartaoCreditoResponseDTO criar(CartaoCreditoRequestDTO dto) {
-        String nomeFormatado = dto.nome().trim();
-
-        if (cartaoCreditoRepository.existsByNomeIgnoreCase(nomeFormatado)) {
+        if (cartaoCreditoRepository.existsByNomeIgnoreCase(dto.nome())) {
             throw new RegraNegocioException("Já existe um cartão de crédito com o nome informado.");
         }
 
         validarContaPadrao(dto.contaPadraoId());
 
         CartaoCredito cartao = cartaoCreditoMapper.toEntity(dto);
-        cartao.setNome(nomeFormatado);
 
         boolean ehPrimeiroCartao = cartaoCreditoRepository.count() == 0;
         boolean ehPrincipal = ehPrimeiroCartao || Boolean.TRUE.equals(dto.principal());
@@ -79,14 +76,13 @@ public class CartaoCreditoService {
         CartaoCredito existente = cartaoCreditoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Cartão de crédito não encontrado."));
 
-        String novoNomeFormatado = dto.nome().trim();
-        if (cartaoCreditoRepository.existsByNomeIgnoreCaseAndIdNot(novoNomeFormatado, id)) {
+        if (cartaoCreditoRepository.existsByNomeIgnoreCaseAndIdNot(dto.nome(), id)) {
             throw new RegraNegocioException("Já existe um cartão de crédito com o nome informado.");
         }
 
         validarContaPadrao(dto.contaPadraoId());
 
-        existente.setNome(novoNomeFormatado);
+        existente.setNome(dto.nome());
         existente.setLimiteTotal(dto.limiteTotal());
         existente.setDiaFechamento(dto.diaFechamento());
         existente.setDiaVencimento(dto.diaVencimento());
