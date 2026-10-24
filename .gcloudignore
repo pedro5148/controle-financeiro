@@ -1,0 +1,14 @@
+.git/
+.idea/
+target/
+.env
+.env.*
+*.log
+.gitlab-ci.yml
+terraform/
+.agents/
+*.png
+*.md
+gcp-env.sh
+.gemini/
+.vscode
