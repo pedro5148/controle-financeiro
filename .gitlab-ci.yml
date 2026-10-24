@@ -82,6 +82,11 @@ deploy:
 
       echo "=== FIM DO DIAGNOSTICO ==="
 
+      echo "Verificando permissao de listar buckets..."
+
+      gcloud storage buckets list \
+        --project="$GCP_PROJECT_ID" \
+        --format="value(name)"
 
   script:
     - |
