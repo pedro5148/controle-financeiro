@@ -96,13 +96,54 @@ deploy:
 
       echo "Construindo imagem Docker..."
 
-      gcloud builds submit . \
+      # Inicia o build sem tentar transmitir os logs.
+      BUILD_ID=$(gcloud builds submit . \
         --tag="$IMAGE_URL" \
         --region="$GCP_REGION" \
         --project="$GCP_PROJECT_ID" \
         --gcs-source-staging-dir="gs://${GCP_PROJECT_ID}_cloudbuild/source" \
-        --suppress-logs \
-        --quiet
+        --async \
+        --format="value(id)")
+
+      if [ -z "$BUILD_ID" ]; then
+        echo "ERRO: Cloud Build nao retornou um ID."
+        exit 1
+      fi
+
+      echo "Build iniciado: $BUILD_ID"
+
+      # Consulta o status sem acessar o bucket de logs.
+      TENTATIVAS=0
+      MAX_TENTATIVAS=60
+
+      while true; do
+        STATUS=$(gcloud builds describe "$BUILD_ID" \
+          --region="$GCP_REGION" \
+          --project="$GCP_PROJECT_ID" \
+          --format="value(status)")
+
+        echo "Status do Cloud Build: $STATUS"
+
+        case "$STATUS" in
+          SUCCESS)
+            echo "Imagem Docker construida com sucesso."
+            break
+            ;;
+          FAILURE|CANCELLED|TIMEOUT|EXPIRED|INTERNAL_ERROR)
+            echo "ERRO: Build terminou com status $STATUS"
+            exit 1
+            ;;
+        esac
+
+        TENTATIVAS=$((TENTATIVAS + 1))
+
+        if [ "$TENTATIVAS" -ge "$MAX_TENTATIVAS" ]; then
+          echo "ERRO: Tempo limite de acompanhamento atingido."
+          exit 1
+        fi
+
+        sleep 10
+      done
 
       echo "Atualizando Cloud Run..."
 
@@ -112,12 +153,14 @@ deploy:
         --project="$GCP_PROJECT_ID" \
         --quiet
 
-      echo "Verificando status do serviço..."
+      echo "Verificando servico..."
 
       gcloud run services describe meufinanceiro-api \
         --region="$GCP_REGION" \
         --project="$GCP_PROJECT_ID" \
         --format="yaml(status.conditions,status.latestReadyRevisionName,status.url)"
+
+      echo "Pipeline concluido com sucesso."
 
   after_script:
     - rm -f oidc-token.jwt gcp-credentials.json
