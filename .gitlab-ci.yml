@@ -2,97 +2,113 @@ stages:
   - test
   - deploy
 
-# ============================
-# ETAPA 1 - TESTES
-# ============================
-
+# Valida o projeto em merge requests e na branch principal.
 test:
   stage: test
   image: maven:3.9-eclipse-temurin-21
-
   script:
     - mvn -B clean verify
-
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
 
-
-# ============================
-# ETAPA 2 - BUILD E DEPLOY
-# ============================
-
+# Publica no Cloud Run somente a partir da branch principal.
 deploy:
   stage: deploy
-
   image: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
-
   id_tokens:
     GITLAB_OIDC_TOKEN:
       aud: https://gitlab.com
 
-  variables:
-    GOOGLE_APPLICATION_CREDENTIALS: "$CI_PROJECT_DIR/gcp-credentials.json"
-
   before_script:
     - |
       set -eu
+      echo "Autenticando no Google Cloud via OIDC..."
 
-      echo "Preparando autenticação OIDC..."
-
-      printf '%s' "$GITLAB_OIDC_TOKEN" > oidc-token.jwt
-      chmod 600 oidc-token.jwt
+      # Mantem o token e o arquivo de credenciais fora do contexto do build.
+      AUTH_DIR="/tmp/gitlab-gcp-${CI_JOB_ID}"
+      mkdir -p "$AUTH_DIR"
+      chmod 700 "$AUTH_DIR"
+      printf '%s' "$GITLAB_OIDC_TOKEN" > "$AUTH_DIR/oidc-token.jwt"
+      chmod 600 "$AUTH_DIR/oidc-token.jwt"
 
       gcloud iam workload-identity-pools create-cred-config \
         "projects/${GCP_PROJECT_NUMBER}/locations/global/workloadIdentityPools/${GCP_WIF_POOL}/providers/${GCP_WIF_PROVIDER}" \
         --service-account="$GCP_DEPLOY_SA" \
-        --credential-source-file="$CI_PROJECT_DIR/oidc-token.jwt" \
-        --output-file="$GOOGLE_APPLICATION_CREDENTIALS"
+        --credential-source-file="$AUTH_DIR/oidc-token.jwt" \
+        --output-file="$AUTH_DIR/gcp-credentials.json"
 
-      gcloud auth login \
-        --cred-file="$GOOGLE_APPLICATION_CREDENTIALS" \
-        --quiet
-
+      gcloud auth login --cred-file="$AUTH_DIR/gcp-credentials.json" --quiet
       gcloud config set project "$GCP_PROJECT_ID"
-
-      echo "Autenticação configurada."
+      echo "Autenticacao concluida."
 
   script:
     - |
       set -eu
-
       IMAGE_URL="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/meufinanceiro-api/api:${CI_COMMIT_SHA}"
 
-      echo "Construindo imagem Docker..."
-
-      gcloud builds submit . \
+      echo "Iniciando Cloud Build: $IMAGE_URL"
+      BUILD_ID=$(gcloud builds submit . \
         --tag="$IMAGE_URL" \
         --region="$GCP_REGION" \
         --project="$GCP_PROJECT_ID" \
-        --quiet
+        --gcs-source-staging-dir="gs://${GCP_PROJECT_ID}_cloudbuild/source" \
+        --async \
+        --format="value(id)")
 
-      echo "Atualizando Cloud Run..."
+      if [ -z "$BUILD_ID" ]; then
+        echo "ERRO: Cloud Build nao retornou um ID."
+        exit 1
+      fi
 
+      echo "Build iniciado: $BUILD_ID"
+      TENTATIVAS=0
+      MAX_TENTATIVAS=60
+
+      while true; do
+        STATUS=$(gcloud builds describe "$BUILD_ID" \
+          --region="$GCP_REGION" \
+          --project="$GCP_PROJECT_ID" \
+          --format="value(status)")
+        echo "Cloud Build: $STATUS"
+
+        case "$STATUS" in
+          SUCCESS)
+            break
+            ;;
+          FAILURE|CANCELLED|TIMEOUT|EXPIRED|INTERNAL_ERROR)
+            echo "ERRO: Cloud Build finalizado com status $STATUS"
+            exit 1
+            ;;
+        esac
+
+        TENTATIVAS=$((TENTATIVAS + 1))
+        if [ "$TENTATIVAS" -ge "$MAX_TENTATIVAS" ]; then
+          echo "ERRO: limite de espera do Cloud Build atingido."
+          exit 1
+        fi
+        sleep 10
+      done
+
+      echo "Build concluido. Implantando no Cloud Run..."
       gcloud run deploy meufinanceiro-api \
         --image="$IMAGE_URL" \
         --region="$GCP_REGION" \
         --project="$GCP_PROJECT_ID" \
         --quiet
 
-      echo "Verificando status do serviço..."
-
+      echo "Conferindo a revisao implantada..."
       gcloud run services describe meufinanceiro-api \
         --region="$GCP_REGION" \
         --project="$GCP_PROJECT_ID" \
         --format="yaml(status.conditions,status.latestReadyRevisionName,status.url)"
+      echo "Deploy concluido."
 
   after_script:
-    - rm -f oidc-token.jwt gcp-credentials.json
+    - rm -rf "/tmp/gitlab-gcp-${CI_JOB_ID}"
 
   environment:
     name: production-test
-
   resource_group: meufinanceiro-deploy
-
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
