@@ -57,6 +57,32 @@ deploy:
 
       echo "Autenticação configurada."
 
+
+      echo "=== DIAGNOSTICO GOOGLE CLOUD ==="
+
+      echo "Projeto configurado:"
+      gcloud config get-value project
+
+      echo "Projeto do pipeline:"
+      echo "$GCP_PROJECT_ID"
+
+      echo "Identidade autenticada:"
+      gcloud auth list --filter="status:ACTIVE" \
+        --format="value(account)"
+
+      echo "Verificando acesso ao bucket..."
+      gcloud storage buckets describe \
+        "gs://${GCP_PROJECT_ID}_cloudbuild" \
+        --format="yaml(name,location)"
+
+      echo "Verificando listagem de objetos..."
+      gcloud storage ls \
+        "gs://${GCP_PROJECT_ID}_cloudbuild/source/" \
+        || echo "Nao foi possivel listar os objetos."
+
+      echo "=== FIM DO DIAGNOSTICO ==="
+
+
   script:
     - |
       set -eu
