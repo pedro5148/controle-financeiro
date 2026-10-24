@@ -38,6 +38,9 @@ deploy:
     - |
       set -eu
 
+      apt-get update -qq
+      apt-get install -y -qq python3
+      
       # Diagnóstico temporário do token OIDC
       echo "Verificando atributos do token GitLab..."
 
