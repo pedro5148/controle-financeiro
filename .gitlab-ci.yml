@@ -38,6 +38,31 @@ deploy:
     - |
       set -eu
 
+      # Diagnóstico temporário do token OIDC
+      echo "Verificando atributos do token GitLab..."
+
+      python3 - <<'PY'
+      import os
+      import json
+      import base64
+
+      token = os.environ["GITLAB_OIDC_TOKEN"]
+      payload = token.split(".")[1]
+      payload += "=" * (-len(payload) % 4)
+
+      claims = json.loads(
+          base64.urlsafe_b64decode(payload)
+      )
+
+      for campo in [
+          "project_id",
+          "namespace_id",
+          "ref",
+          "ref_type"
+      ]:
+          print(f"{campo}: {claims.get(campo)}")
+      PY
+
       echo "Preparando autenticação OIDC..."
 
       printf '%s' "$GITLAB_OIDC_TOKEN" > oidc-token.jwt
