@@ -100,6 +100,8 @@ deploy:
         --tag="$IMAGE_URL" \
         --region="$GCP_REGION" \
         --project="$GCP_PROJECT_ID" \
+        --gcs-source-staging-dir="gs://${GCP_PROJECT_ID}_cloudbuild/source" \
+        --suppress-logs \
         --quiet
 
       echo "Atualizando Cloud Run..."
