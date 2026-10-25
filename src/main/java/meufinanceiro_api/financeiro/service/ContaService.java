@@ -13,7 +13,6 @@ import meufinanceiro_api.financeiro.dto.ContaResponseDTO;
 import meufinanceiro_api.financeiro.dto.ContaResumoDTO;
 import meufinanceiro_api.financeiro.dto.ReajusteSaldoRequestDTO;
 import meufinanceiro_api.financeiro.dto.SaldoMensalResponseDTO;
-import meufinanceiro_api.financeiro.enums.MeioPagamento;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.enums.TipoRecorrencia;
@@ -206,11 +205,6 @@ public class ContaService {
             throw new RegraNegocioException("Não é possível reajustar o saldo de uma conta inativa.");
         }
 
-        MeioPagamento meioPagamento = dto.meioPagamento() != null ? dto.meioPagamento() : MeioPagamento.PIX;
-        if (meioPagamento == MeioPagamento.CREDITO) {
-            throw new RegraNegocioException("Não é permitido utilizar cartão de crédito para reajuste de saldo de conta bancária.");
-        }
-
         BigDecimal saldoInicialBase = existente.getSaldoInicial() != null ? existente.getSaldoInicial() : BigDecimal.ZERO;
         BigDecimal saldoAtualReal = calcularSaldoRealDaConta(id, saldoInicialBase);
         BigDecimal diferenca = dto.novoSaldoAtual().subtract(saldoAtualReal);
@@ -239,7 +233,6 @@ public class ContaService {
             lancamentoAjuste.setTipoRecorrencia(TipoRecorrencia.NENHUMA);
             lancamentoAjuste.setParcelaAtual(1);
             lancamentoAjuste.setTotalParcelas(1);
-            lancamentoAjuste.setMeioPagamento(meioPagamento);
             lancamentoAjuste.setObservacoes(dto.observacoes());
 
             lancamentoRepository.save(lancamentoAjuste);

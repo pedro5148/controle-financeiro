@@ -3,7 +3,6 @@ package meufinanceiro_api.financeiro.dto;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import meufinanceiro_api.financeiro.enums.MeioPagamento;
 
 import java.math.BigDecimal;
 
@@ -15,8 +14,6 @@ public record ReajusteSaldoRequestDTO(
         Long categoriaId,
 
         Long subcategoriaId,
-
-        MeioPagamento meioPagamento,
 
         @Size(max = 100, message = "A descrição deve ter no máximo 100 caracteres")
         String descricao,

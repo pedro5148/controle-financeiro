@@ -3,7 +3,6 @@ package meufinanceiro_api.financeiro.service;
 import jakarta.persistence.EntityNotFoundException;
 import meufinanceiro_api.financeiro.domain.Conta;
 import meufinanceiro_api.financeiro.domain.Lancamento;
-import meufinanceiro_api.financeiro.enums.MeioPagamento;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
@@ -27,7 +26,7 @@ class LancamentoExclusaoTest {
     private Lancamento parcela(long id, int numero, TipoLancamento tipo, StatusLancamento status, Conta conta, Conta destino) {
         Lancamento item = new Lancamento();
         item.setId(id); item.setGrupoParcelamentoId(10L); item.setParcelaAtual(numero);
-        item.setTipo(tipo); item.setStatus(status); item.setMeioPagamento(MeioPagamento.PIX);
+        item.setTipo(tipo); item.setStatus(status);
         item.setValor(new BigDecimal("25")); item.setConta(conta); item.setContaDestino(destino);
         // As datas podem ser iguais ou editadas; a ordem deve vir da numeração da parcela.
         item.setDataLancamento(LocalDate.of(2026, 10, 1));

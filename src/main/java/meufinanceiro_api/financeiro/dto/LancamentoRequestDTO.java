@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-import meufinanceiro_api.financeiro.enums.MeioPagamento;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.enums.TipoRecorrencia;
@@ -18,8 +17,6 @@ public record LancamentoRequestDTO(
 
         @NotNull(message = "O tipo de lançamento é obrigatório")
         TipoLancamento tipo,
-        @NotNull(message = "O meio de pagamento é obrigatório")
-        MeioPagamento meioPagamento,
         @NotBlank(message = "A descrição é obrigatória")
         @Size(min = 2, max = 100, message = "A descrição deve ter entre 2 e 100 caracteres")
         String descricao,
@@ -59,7 +56,7 @@ public record LancamentoRequestDTO(
         Long documentoFiscalId
 ) {
         public LancamentoRequestDTO {
-                descricao = (descricao != null) ? descricao.trim() : null;
+                descricao = (descricao != null) ? descricao.trim().replaceAll("\\s+", " ") : null;
                 observacoes = (observacoes == null || observacoes.isBlank())
                         ? null
                         : observacoes.trim();

@@ -6,7 +6,6 @@ import meufinanceiro_api.faturamento.service.FaturaService;
 import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoUpdateDTO;
-import meufinanceiro_api.financeiro.enums.MeioPagamento;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.enums.TipoRecorrencia;
@@ -42,17 +41,17 @@ public class LancamentoCreditoStrategy extends AbstractLancamentoStrategy {
 
     @Override
     public boolean isApplicable(LancamentoRequestDTO dto) {
-        return dto.meioPagamento() == MeioPagamento.CREDITO;
+        return dto.cartaoCreditoId() != null;
     }
 
     @Override
     public boolean isApplicable(LancamentoUpdateDTO dto) {
-        return dto.meioPagamento() == MeioPagamento.CREDITO;
+        return dto.cartaoCreditoId() != null;
     }
 
     @Override
     public boolean isApplicable(Lancamento lancamento) {
-        return lancamento.getMeioPagamento() == MeioPagamento.CREDITO;
+        return lancamento.getCartaoCreditoId() != null;
     }
 
     @Override
@@ -94,7 +93,7 @@ public class LancamentoCreditoStrategy extends AbstractLancamentoStrategy {
 
         if (cartaoCreditoId == null) {
             throw new RegraNegocioException(
-                    "O cartão de crédito é obrigatório quando o meio de pagamento for CREDITO.");
+                    "O cartão de crédito é obrigatório para lançamentos a crédito.");
         }
 
         lancamento.setCartaoCreditoId(cartaoCreditoId);

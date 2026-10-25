@@ -3,7 +3,6 @@ package meufinanceiro_api.financeiro.service.strategy;
 import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoUpdateDTO;
-import meufinanceiro_api.financeiro.enums.MeioPagamento;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.enums.TipoRecorrencia;
@@ -34,19 +33,17 @@ public class LancamentoNormalStrategy extends AbstractLancamentoStrategy {
 
     @Override
     public boolean isApplicable(LancamentoRequestDTO dto) {
-        // Se não for crédito, é um lançamento normal (dinheiro, débito, pix,
-        // transferência, boleto)
-        return dto.meioPagamento() != MeioPagamento.CREDITO;
+        return dto.cartaoCreditoId() == null;
     }
 
     @Override
     public boolean isApplicable(LancamentoUpdateDTO dto) {
-        return dto.meioPagamento() != MeioPagamento.CREDITO;
+        return dto.cartaoCreditoId() == null;
     }
 
     @Override
     public boolean isApplicable(Lancamento lancamento) {
-        return lancamento.getMeioPagamento() != MeioPagamento.CREDITO;
+        return lancamento.getCartaoCreditoId() == null;
     }
 
     @Override
@@ -77,7 +74,7 @@ public class LancamentoNormalStrategy extends AbstractLancamentoStrategy {
 
         if (cartaoCreditoId != null) {
             throw new RegraNegocioException(
-                    "O cartão de crédito só deve ser informado quando o meio de pagamento for CREDITO.");
+                    "Lançamentos em conta bancária não devem informar cartão de crédito.");
         }
 
         lancamento.setFaturaId(null);

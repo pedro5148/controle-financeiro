@@ -2,7 +2,6 @@ package meufinanceiro_api.financeiro.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
-import meufinanceiro_api.financeiro.enums.MeioPagamento;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.enums.TipoRecorrencia;
@@ -88,10 +87,6 @@ public class Lancamento {
 
     @Column(name = "grupo_parcelamento_id")
     private Long grupoParcelamentoId;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "meio_pagamento", nullable = false)
-    private MeioPagamento meioPagamento;
 
     @Column(name = "cartao_credito_id")
     private Long cartaoCreditoId;

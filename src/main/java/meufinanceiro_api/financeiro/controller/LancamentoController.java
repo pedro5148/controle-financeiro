@@ -6,8 +6,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
+import meufinanceiro_api.financeiro.dto.LancamentoSugestaoDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoUpdateDTO;
-import meufinanceiro_api.financeiro.enums.MeioPagamento;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.service.LancamentoService;
@@ -36,7 +36,6 @@ public class LancamentoController {
     public ResponseEntity<Page<LancamentoResponseDTO>> listar(
             @RequestParam(required = false) String descricao,
             @RequestParam(required = false) TipoLancamento tipo,
-            @RequestParam(required = false) MeioPagamento meioPagamento,
             @RequestParam(required = false) StatusLancamento status,
             @RequestParam(required = false) Long contaId,
             @RequestParam(required = false) Long categoriaId,
@@ -49,7 +48,16 @@ public class LancamentoController {
             @PageableDefault(sort = "dataLancamento", direction = Sort.Direction.DESC, size = 20) Pageable pageable) {
 
         return ResponseEntity.ok(lancamentoService.listar(
-                descricao, tipo, meioPagamento, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, cartaoCreditoId, faturaId, mes, ano, pageable));
+                descricao, tipo, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, cartaoCreditoId, faturaId, mes, ano, pageable));
+    }
+
+    @Operation(summary = "Sugerir descrições de lançamentos (autocomplete)", description = "Retorna sugestões deduplicadas de descrições de lançamentos anteriores com base em busca parcial e similaridade de trigramas (pg_trgm), incluindo a categoria e subcategoria ativas mais recentes associadas a cada descrição.")
+    @GetMapping("/sugestoes-descricao")
+    public ResponseEntity<List<LancamentoSugestaoDTO>> sugerirDescricoes(
+            @RequestParam String termo,
+            @RequestParam(required = false) TipoLancamento tipo,
+            @RequestParam(required = false, defaultValue = "10") int limite) {
+        return ResponseEntity.ok(lancamentoService.sugerirDescricoes(termo, tipo, limite));
     }
 
     @Operation(summary = "Buscar lançamento por ID", description = "Retorna os detalhes de um lançamento específico informado pelo seu identificador único.")

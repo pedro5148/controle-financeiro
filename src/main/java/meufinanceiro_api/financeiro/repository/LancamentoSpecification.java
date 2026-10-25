@@ -2,7 +2,6 @@ package meufinanceiro_api.financeiro.repository;
 
 import jakarta.persistence.criteria.Predicate;
 import meufinanceiro_api.financeiro.domain.Lancamento;
-import meufinanceiro_api.financeiro.enums.MeioPagamento;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
@@ -17,7 +16,6 @@ public class LancamentoSpecification {
     public static Specification<Lancamento> filtroAvancado(
             String descricao,
             TipoLancamento tipo,
-            MeioPagamento meioPagamento,
             StatusLancamento status,
             Long contaId,
             Long categoriaId,
@@ -41,10 +39,6 @@ public class LancamentoSpecification {
 
             if (tipo != null) {
                 predicates.add(cb.equal(root.get("tipo"), tipo));
-            }
-
-            if (meioPagamento != null) {
-                predicates.add(cb.equal(root.get("meioPagamento"), meioPagamento));
             }
 
             if (status != null) {
@@ -89,11 +83,11 @@ public class LancamentoSpecification {
                 }
 
                 Predicate filtroCreditoPorVencimento = cb.and(
-                        cb.equal(root.get("meioPagamento"), MeioPagamento.CREDITO),
+                        cb.isNotNull(root.get("cartaoCreditoId")),
                         cb.between(root.get("dataVencimento"), start, end)
                 );
                 Predicate filtroNormalPorLancamento = cb.and(
-                        cb.notEqual(root.get("meioPagamento"), MeioPagamento.CREDITO),
+                        cb.isNull(root.get("cartaoCreditoId")),
                         cb.between(root.get("dataLancamento"), start, end)
                 );
                 predicates.add(cb.or(filtroCreditoPorVencimento, filtroNormalPorLancamento));

@@ -86,7 +86,7 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
             LEFT JOIN l.conta co
             LEFT JOIN l.contaDestino cd
             WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.EFETIVADO
-              AND l.meioPagamento <> meufinanceiro_api.financeiro.enums.MeioPagamento.CREDITO
+              AND l.cartaoCreditoId IS NULL
               AND COALESCE(l.dataEfetivacao, l.dataLancamento) >= :dataCorte
               AND (
                   (l.tipo = meufinanceiro_api.financeiro.enums.TipoLancamento.RECEITA
@@ -105,7 +105,7 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
             FROM Lancamento l
             JOIN l.conta co
             WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.EFETIVADO
-              AND l.meioPagamento <> meufinanceiro_api.financeiro.enums.MeioPagamento.CREDITO
+              AND l.cartaoCreditoId IS NULL
               AND COALESCE(l.dataEfetivacao, l.dataLancamento) >= :dataCorte
               AND ((:contaId IS NULL AND co.ativo = true) OR (co.id = :contaId))
               AND l.tipo IN (
@@ -123,7 +123,7 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
             LEFT JOIN l.conta co
             LEFT JOIN l.contaDestino cd
             WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.PENDENTE
-              AND l.meioPagamento <> meufinanceiro_api.financeiro.enums.MeioPagamento.CREDITO
+              AND l.cartaoCreditoId IS NULL
               AND l.dataVencimento <= :dataFim
               AND (
                   (l.tipo = meufinanceiro_api.financeiro.enums.TipoLancamento.RECEITA
@@ -142,7 +142,7 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
             FROM Lancamento l
             JOIN l.conta co
             WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.PENDENTE
-              AND l.meioPagamento <> meufinanceiro_api.financeiro.enums.MeioPagamento.CREDITO
+              AND l.cartaoCreditoId IS NULL
               AND l.dataVencimento <= :dataFim
               AND ((:contaId IS NULL AND co.ativo = true) OR (co.id = :contaId))
               AND l.tipo IN (
@@ -153,4 +153,81 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
     BigDecimal somarSaidasPendentesAte(
             @Param("dataFim") LocalDate dataFim,
             @Param("contaId") Long contaId);
+
+    public interface LancamentoSugestaoProjection {
+        String getDescricao();
+        Long getCategoriaId();
+        String getCategoriaNome();
+        Boolean getCategoriaAtivo();
+        Long getSubcategoriaId();
+        String getSubcategoriaNome();
+        Boolean getSubcategoriaAtivo();
+    }
+
+    @Query(value = """
+            WITH lancamentos_filtrados AS (
+                SELECT
+                    TRIM(l.descricao) AS descricao,
+                    LOWER(TRIM(l.descricao)) AS descricao_key,
+                    l.id,
+                    l.data_lancamento,
+                    c.id AS categoria_id,
+                    c.nome AS categoria_nome,
+                    c.ativo AS categoria_ativo,
+                    s.id AS subcategoria_id,
+                    s.nome AS subcategoria_nome,
+                    s.ativo AS subcategoria_ativo,
+                    word_similarity(:termo, l.descricao) AS sim_score
+                FROM lancamentos l
+                JOIN categorias c ON c.id = l.categoria_id
+                LEFT JOIN subcategorias s ON s.id = l.subcategoria_id
+                WHERE (:tipo IS NULL OR l.tipo = :tipo)
+                  AND (
+                      l.descricao ILIKE CONCAT('%', :termo, '%')
+                      OR (
+                          CHAR_LENGTH(:termo) >= 6
+                          AND word_similarity(:termo, l.descricao) >= 0.6
+                      )
+                  )
+            ),
+            agrupado AS (
+                SELECT DISTINCT ON (descricao_key)
+                    descricao,
+                    categoria_id AS categoriaId,
+                    categoria_nome AS categoriaNome,
+                    categoria_ativo AS categoriaAtivo,
+                    subcategoria_id AS subcategoriaId,
+                    subcategoria_nome AS subcategoriaNome,
+                    subcategoria_ativo AS subcategoriaAtivo,
+                    sim_score,
+                    COUNT(*) OVER (PARTITION BY descricao_key) AS frequencia,
+                    id AS ultimo_id
+                FROM lancamentos_filtrados
+                ORDER BY
+                    descricao_key,
+                    categoria_ativo DESC,
+                    (subcategoria_id IS NULL OR subcategoria_ativo = true) DESC,
+                    data_lancamento DESC,
+                    id DESC
+            )
+            SELECT
+                descricao,
+                categoriaId,
+                categoriaNome,
+                categoriaAtivo,
+                subcategoriaId,
+                subcategoriaNome,
+                subcategoriaAtivo
+            FROM agrupado
+            ORDER BY
+                CASE WHEN LOWER(descricao) LIKE LOWER(CONCAT(:termo, '%')) THEN 0 ELSE 1 END,
+                sim_score DESC,
+                frequencia DESC,
+                ultimo_id DESC
+            LIMIT :limite
+            """, nativeQuery = true)
+    List<LancamentoSugestaoProjection> buscarSugestoesPorDescricao(
+            @Param("termo") String termo,
+            @Param("tipo") String tipo,
+            @Param("limite") int limite);
 }

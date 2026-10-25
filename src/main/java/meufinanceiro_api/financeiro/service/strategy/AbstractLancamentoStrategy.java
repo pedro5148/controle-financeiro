@@ -104,7 +104,6 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
         if (!pendentesDoGrupo.isEmpty()) {
             for (Lancamento pendente : pendentesDoGrupo) {
                 pendente.setTipo(lancamentoAlvo.getTipo());
-                pendente.setMeioPagamento(lancamentoAlvo.getMeioPagamento());
                 pendente.setDescricao(lancamentoAlvo.getDescricao());
                 pendente.setValor(lancamentoAlvo.getValor());
                 pendente.setConta(lancamentoAlvo.getConta());
@@ -266,7 +265,6 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
     protected Lancamento copiarLancamento(Lancamento base) {
         Lancamento copia = new Lancamento();
         copia.setTipo(base.getTipo());
-        copia.setMeioPagamento(base.getMeioPagamento());
         copia.setDescricao(base.getDescricao());
         copia.setValor(base.getValor());
         copia.setConta(base.getConta());

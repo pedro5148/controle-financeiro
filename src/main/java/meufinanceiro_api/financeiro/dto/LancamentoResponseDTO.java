@@ -1,6 +1,5 @@
 package meufinanceiro_api.financeiro.dto;
 
-import meufinanceiro_api.financeiro.enums.MeioPagamento;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.enums.TipoRecorrencia;
@@ -11,7 +10,6 @@ import java.time.LocalDate;
 public record LancamentoResponseDTO(
         Long id,
         TipoLancamento tipo,
-        MeioPagamento meioPagamento,
         String descricao,
         BigDecimal valor,
 

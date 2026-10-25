@@ -3,10 +3,12 @@ package meufinanceiro_api.financeiro.service;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import meufinanceiro_api.financeiro.domain.Lancamento;
+import meufinanceiro_api.financeiro.dto.CategoriaResponseDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
+import meufinanceiro_api.financeiro.dto.LancamentoSugestaoDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoUpdateDTO;
-import meufinanceiro_api.financeiro.enums.MeioPagamento;
+import meufinanceiro_api.financeiro.dto.SubcategoriaResponseDTO;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
@@ -36,7 +38,6 @@ public class LancamentoService {
     public Page<LancamentoResponseDTO> listar(
             String descricao,
             TipoLancamento tipo,
-            MeioPagamento meioPagamento,
             StatusLancamento status,
             Long contaId,
             Long categoriaId,
@@ -48,9 +49,35 @@ public class LancamentoService {
             Integer ano,
             Pageable pageable) {
         Specification<Lancamento> spec = LancamentoSpecification
-                .filtroAvancado(descricao, tipo, meioPagamento, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, cartaoCreditoId, faturaId, mes, ano);
+                .filtroAvancado(descricao, tipo, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, cartaoCreditoId, faturaId, mes, ano);
         Page<Lancamento> paginasEntidade = lancamentoRepository.findAll(spec, pageable);
         return paginasEntidade.map(lancamentoMapper::toResponseDTO);
+    }
+
+    @Transactional(readOnly = true)
+    public List<LancamentoSugestaoDTO> sugerirDescricoes(String termo, TipoLancamento tipo, int limite) {
+        if (termo == null) {
+            return List.of();
+        }
+        String termoLimpo = termo.trim().replaceAll("\\s+", " ");
+        if (termoLimpo.length() < 3) {
+            return List.of();
+        }
+        int limiteSeguro = Math.clamp(limite, 1, 20);
+        String tipoStr = (tipo != null) ? tipo.name() : null;
+
+        return lancamentoRepository.buscarSugestoesPorDescricao(termoLimpo, tipoStr, limiteSeguro)
+                .stream()
+                .map(p -> {
+                    CategoriaResponseDTO cat = (p.getCategoriaId() != null && Boolean.TRUE.equals(p.getCategoriaAtivo()))
+                            ? new CategoriaResponseDTO(p.getCategoriaId(), p.getCategoriaNome(), p.getCategoriaAtivo(), null)
+                            : null;
+                    SubcategoriaResponseDTO sub = (cat != null && p.getSubcategoriaId() != null && Boolean.TRUE.equals(p.getSubcategoriaAtivo()))
+                            ? new SubcategoriaResponseDTO(p.getSubcategoriaId(), p.getSubcategoriaNome(), p.getSubcategoriaAtivo())
+                            : null;
+                    return new LancamentoSugestaoDTO(p.getDescricao(), cat, sub);
+                })
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -81,7 +108,7 @@ public class LancamentoService {
 
         if (!strategy.isApplicable(dto)) {
             throw new RegraNegocioException(
-                    "Não é permitido alterar o meio de pagamento de um lançamento normal para cartão de crédito (ou vice-versa). Exclua o lançamento e crie um novo.");
+                    "Não é permitido converter um lançamento de conta bancária para cartão de crédito (ou vice-versa). Exclua o lançamento e crie um novo.");
         }
 
         return strategy.atualizar(existente, dto, atualizarPendentesDoGrupo);
@@ -92,7 +119,7 @@ public class LancamentoService {
         Lancamento lancamento = lancamentoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado."));
 
-        if (lancamento.getMeioPagamento() == MeioPagamento.CREDITO) {
+        if (lancamento.getCartaoCreditoId() != null) {
             throw new RegraNegocioException(
                     "Lançamentos no cartão de crédito só podem ser efetivados por meio do pagamento da fatura.");
         }
@@ -130,7 +157,7 @@ public class LancamentoService {
         Lancamento lancamento = lancamentoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado."));
 
-        if (lancamento.getMeioPagamento() == MeioPagamento.CREDITO) {
+        if (lancamento.getCartaoCreditoId() != null) {
             throw new RegraNegocioException(
                     "O status de lançamentos no cartão de crédito é controlado pelo pagamento da fatura.");
         }
