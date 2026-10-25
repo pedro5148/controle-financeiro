@@ -80,8 +80,81 @@ public class Fatura {
     public void removerValor(BigDecimal valor) {
         validarAbertaParaMovimentacao();
         BigDecimal base = (this.valorTotal != null) ? this.valorTotal : BigDecimal.ZERO;
+        BigDecimal pago = (this.valorPago != null) ? this.valorPago : BigDecimal.ZERO;
         BigDecimal resultado = base.subtract(valor);
-        this.valorTotal = resultado.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : resultado;
+        if (resultado.compareTo(BigDecimal.ZERO) < 0) {
+            resultado = BigDecimal.ZERO;
+        }
+        if (resultado.compareTo(pago) < 0) {
+            throw new RegraNegocioException(
+                    String.format("Não é possível remover ou reduzir este lançamento pois o valor total da fatura (R$ %s) ficaria menor que o valor já pago/adiantado (R$ %s). Estorne o pagamento antes de realizar esta operação.",
+                            resultado, pago)
+            );
+        }
+        this.valorTotal = resultado;
+    }
+
+    public void fechar() {
+        if (this.status != StatusFatura.ABERTA) {
+            throw new RegraNegocioException(
+                    "Apenas faturas com status ABERTA podem ser fechadas. Status atual: " + this.status + "."
+            );
+        }
+        BigDecimal total = (this.valorTotal != null) ? this.valorTotal : BigDecimal.ZERO;
+        if (total.compareTo(BigDecimal.ZERO) > 0 && getSaldoRestante().compareTo(BigDecimal.ZERO) == 0) {
+            this.status = StatusFatura.PAGA;
+        } else {
+            this.status = StatusFatura.FECHADA;
+        }
+    }
+
+    public void reabrir() {
+        if (this.status == StatusFatura.ABERTA) {
+            throw new RegraNegocioException("A fatura " + this.mesAno + " já se encontra ABERTA.");
+        }
+        if (this.status == StatusFatura.PAGA) {
+            throw new RegraNegocioException(
+                    "Não é possível reabrir uma fatura com status PAGA. Estorne o pagamento da fatura antes de reabri-la."
+            );
+        }
+        this.status = StatusFatura.ABERTA;
+    }
+
+    public void registrarPagamento(BigDecimal valor) {
+        if (this.status == StatusFatura.PAGA) {
+            throw new RegraNegocioException("A fatura " + this.mesAno + " já se encontra totalmente paga.");
+        }
+        BigDecimal restante = getSaldoRestante();
+        if (restante.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RegraNegocioException("Não há saldo restante a pagar na fatura " + this.mesAno + ".");
+        }
+        if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RegraNegocioException("O valor do pagamento deve ser maior que zero.");
+        }
+        if (valor.compareTo(restante) > 0) {
+            throw new RegraNegocioException(
+                    String.format("O valor do pagamento (R$ %s) não pode ser maior que o saldo restante da fatura (R$ %s).",
+                            valor, restante)
+            );
+        }
+
+        BigDecimal pagoAtual = (this.valorPago != null) ? this.valorPago : BigDecimal.ZERO;
+        this.valorPago = pagoAtual.add(valor);
+
+        // Se a fatura não estiver ABERTA e o saldo restante zerou, passa automaticamente para PAGA
+        if (!isAberta() && getSaldoRestante().compareTo(BigDecimal.ZERO) == 0) {
+            this.status = StatusFatura.PAGA;
+        }
+    }
+
+    public void estornarPagamento(BigDecimal valorEstornado) {
+        BigDecimal pagoAtual = (this.valorPago != null) ? this.valorPago : BigDecimal.ZERO;
+        BigDecimal novoValorPago = pagoAtual.subtract(valorEstornado);
+        this.valorPago = novoValorPago.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : novoValorPago;
+
+        if (this.status == StatusFatura.PAGA && getSaldoRestante().compareTo(BigDecimal.ZERO) > 0) {
+            this.status = StatusFatura.FECHADA;
+        }
     }
 
     public BigDecimal getSaldoRestante() {

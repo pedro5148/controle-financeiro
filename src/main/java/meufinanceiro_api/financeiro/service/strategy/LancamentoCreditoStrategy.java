@@ -200,6 +200,68 @@ public class LancamentoCreditoStrategy extends AbstractLancamentoStrategy {
     }
 
     @Override
+    protected void atualizarDemaisParcelasPendentesDoGrupo(Lancamento lancamentoAlvo, LancamentoUpdateDTO dto) {
+        List<Lancamento> pendentesDoGrupo = repository.findByGrupoParcelamentoIdAndStatusAndIdNot(
+                lancamentoAlvo.getGrupoParcelamentoId(),
+                StatusLancamento.PENDENTE,
+                lancamentoAlvo.getId()
+        );
+        if (pendentesDoGrupo.isEmpty()) {
+            return;
+        }
+
+        List<Lancamento> parcelasEmFaturaAberta = new ArrayList<>();
+        for (Lancamento pendente : pendentesDoGrupo) {
+            if (pendente.getFaturaId() != null) {
+                Fatura fatura = faturaService.buscarEntidadePorId(pendente.getFaturaId());
+                if (fatura.isAberta()) {
+                    reverterImpactoFinanceiro(pendente);
+                    parcelasEmFaturaAberta.add(pendente);
+                }
+            }
+        }
+
+        if (parcelasEmFaturaAberta.isEmpty()) {
+            return;
+        }
+
+        CartaoCredito cartao = faturaService.obterCartaoAtivo(lancamentoAlvo.getCartaoCreditoId());
+        BigDecimal valorTotalAdicional = lancamentoAlvo.getValor()
+                .multiply(BigDecimal.valueOf(parcelasEmFaturaAberta.size()));
+        faturaService.validarLimiteDisponivel(cartao, valorTotalAdicional);
+
+        for (Lancamento pendente : parcelasEmFaturaAberta) {
+            boolean mudouCartao = !lancamentoAlvo.getCartaoCreditoId().equals(pendente.getCartaoCreditoId());
+
+            pendente.setDescricao(lancamentoAlvo.getDescricao());
+            pendente.setValor(lancamentoAlvo.getValor());
+            pendente.setCategoria(lancamentoAlvo.getCategoria());
+            pendente.setSubcategoria(lancamentoAlvo.getSubcategoria());
+            pendente.setObservacoes(lancamentoAlvo.getObservacoes());
+            pendente.setCartaoCreditoId(lancamentoAlvo.getCartaoCreditoId());
+            pendente.setDocumentoFiscalId(lancamentoAlvo.getDocumentoFiscalId());
+
+            if (mudouCartao) {
+                int offsetMeses = (pendente.getParcelaAtual() != null && pendente.getParcelaAtual() > 1)
+                        ? pendente.getParcelaAtual() - 1
+                        : 0;
+                Fatura novaFatura = faturaService.obterOuCriarFaturaAbertaParaCompra(
+                        cartao,
+                        pendente.getDataLancamento(),
+                        offsetMeses
+                );
+                pendente.setFaturaId(novaFatura.getId());
+                pendente.setDataVencimento(novaFatura.getDataVencimento());
+            }
+
+            faturaService.adicionarValorNaFatura(pendente.getFaturaId(), pendente.getValor());
+        }
+
+        repository.saveAll(parcelasEmFaturaAberta);
+        repository.flush();
+    }
+
+    @Override
     protected void excluirDemaisParcelasPendentesDoGrupo(Lancamento lancamentoAlvo) {
         List<Lancamento> pendentesDoGrupo = repository.findByGrupoParcelamentoIdAndStatusAndIdNot(
                 lancamentoAlvo.getGrupoParcelamentoId(),

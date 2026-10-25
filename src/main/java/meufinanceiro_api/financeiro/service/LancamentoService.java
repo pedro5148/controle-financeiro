@@ -20,6 +20,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -68,7 +70,7 @@ public class LancamentoService {
     }
 
     @Transactional
-    public LancamentoResponseDTO atualizar(Long id, LancamentoUpdateDTO dto) {
+    public LancamentoResponseDTO atualizar(Long id, LancamentoUpdateDTO dto, boolean atualizarPendentesDoGrupo) {
         Lancamento existente = lancamentoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado."));
 
@@ -82,7 +84,107 @@ public class LancamentoService {
                     "Não é permitido alterar o meio de pagamento de um lançamento normal para cartão de crédito (ou vice-versa). Exclua o lançamento e crie um novo.");
         }
 
-        return strategy.atualizar(existente, dto);
+        return strategy.atualizar(existente, dto, atualizarPendentesDoGrupo);
+    }
+
+    @Transactional
+    public LancamentoResponseDTO efetivar(Long id, LocalDate dataEfetivacao) {
+        Lancamento lancamento = lancamentoRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado."));
+
+        if (lancamento.getMeioPagamento() == MeioPagamento.CREDITO) {
+            throw new RegraNegocioException(
+                    "Lançamentos no cartão de crédito só podem ser efetivados por meio do pagamento da fatura.");
+        }
+
+        if (lancamento.getStatus() == StatusLancamento.EFETIVADO) {
+            throw new RegraNegocioException("Este lançamento já se encontra efetivado.");
+        }
+
+        if (lancamento.getConta() == null || !lancamento.getConta().isAtivo()) {
+            throw new RegraNegocioException("Não é possível efetivar o lançamento em uma conta inativa ou inexistente.");
+        }
+
+        BigDecimal valor = lancamento.getValor();
+        switch (lancamento.getTipo()) {
+            case RECEITA -> lancamento.getConta().creditar(valor);
+            case DESPESA -> lancamento.getConta().debitar(valor);
+            case TRANSFERENCIA -> {
+                if (lancamento.getContaDestino() == null || !lancamento.getContaDestino().isAtivo()) {
+                    throw new RegraNegocioException("Não é possível efetivar a transferência para uma conta de destino inativa ou inexistente.");
+                }
+                lancamento.getConta().debitar(valor);
+                lancamento.getContaDestino().creditar(valor);
+            }
+        }
+
+        lancamento.setStatus(StatusLancamento.EFETIVADO);
+        lancamento.setDataEfetivacao(dataEfetivacao != null ? dataEfetivacao : LocalDate.now());
+
+        Lancamento salvo = lancamentoRepository.saveAndFlush(lancamento);
+        return lancamentoMapper.toResponseDTO(salvo);
+    }
+
+    @Transactional
+    public LancamentoResponseDTO marcarComoPendente(Long id) {
+        Lancamento lancamento = lancamentoRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado."));
+
+        if (lancamento.getMeioPagamento() == MeioPagamento.CREDITO) {
+            throw new RegraNegocioException(
+                    "O status de lançamentos no cartão de crédito é controlado pelo pagamento da fatura.");
+        }
+
+        if (lancamento.getStatus() == StatusLancamento.PENDENTE) {
+            throw new RegraNegocioException("Este lançamento já se encontra pendente.");
+        }
+
+        BigDecimal valor = lancamento.getValor();
+        switch (lancamento.getTipo()) {
+            case DESPESA -> lancamento.getConta().creditar(valor);
+            case RECEITA -> lancamento.getConta().debitar(valor);
+            case TRANSFERENCIA -> {
+                lancamento.getConta().creditar(valor);
+                if (lancamento.getContaDestino() != null) {
+                    lancamento.getContaDestino().debitar(valor);
+                }
+            }
+        }
+
+        lancamento.setStatus(StatusLancamento.PENDENTE);
+        lancamento.setDataEfetivacao(null);
+
+        Lancamento salvo = lancamentoRepository.saveAndFlush(lancamento);
+        return lancamentoMapper.toResponseDTO(salvo);
+    }
+
+    @Transactional
+    public void excluir(Long id, boolean excluirPendentesDoGrupo, boolean excluirProximos) {
+        if (excluirPendentesDoGrupo && excluirProximos) {
+            throw new RegraNegocioException("Informe apenas um alcance de exclusão.");
+        }
+        if (!excluirProximos) {
+            excluir(id, excluirPendentesDoGrupo);
+            return;
+        }
+        Lancamento selecionado = lancamentoRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado para exclusão."));
+        if (selecionado.getGrupoParcelamentoId() == null || selecionado.getParcelaAtual() == null) {
+            throw new RegraNegocioException("A exclusão dos próximos lançamentos exige uma parcela de um parcelamento.");
+        }
+
+        LancamentoStrategy strategy = lancamentoStrategies.stream()
+                .filter(s -> s.isApplicable(selecionado))
+                .findFirst()
+                .orElseThrow(() -> new RegraNegocioException("Estratégia não suportada para exclusão."));
+
+        List<Lancamento> parcelas = lancamentoRepository
+                .findByGrupoParcelamentoIdAndParcelaAtualGreaterThanEqualOrderByParcelaAtualAsc(
+                        selecionado.getGrupoParcelamentoId(), selecionado.getParcelaAtual());
+        // A mesma transação estorna cada parcela e desfaz tudo se alguma exclusão falhar.
+        for (Lancamento parcela : parcelas) {
+            strategy.excluir(parcela, false);
+        }
     }
 
     @Transactional

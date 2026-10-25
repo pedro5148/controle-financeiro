@@ -55,7 +55,7 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
 
     @Override
     @Transactional
-    public LancamentoResponseDTO atualizar(Lancamento lancamentoExistente, LancamentoUpdateDTO dto) {
+    public LancamentoResponseDTO atualizar(Lancamento lancamentoExistente, LancamentoUpdateDTO dto, boolean atualizarPendentesDoGrupo) {
         // Fase 1: Estorno financeiro do estado atual (antes da mutação)
         reverterImpactoFinanceiro(lancamentoExistente);
 
@@ -66,6 +66,12 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
 
         // Fase 3: Efetivação do novo estado financeiro e persistência
         Lancamento salvo = atualizarESalvarLancamento(lancamentoExistente);
+
+        // Fase 4: Se solicitado e fizer parte de um parcelamento, propaga alterações para as demais parcelas PENDENTES do grupo
+        if (atualizarPendentesDoGrupo && salvo.getGrupoParcelamentoId() != null) {
+            atualizarDemaisParcelasPendentesDoGrupo(salvo, dto);
+        }
+
         posProcessarAtualizacao(salvo, dto);
 
         return mapper.toResponseDTO(salvo);
@@ -87,6 +93,29 @@ public abstract class AbstractLancamentoStrategy implements LancamentoStrategy{
         repository.flush();
 
         posProcessarExclusao(lancamento);
+    }
+
+    protected void atualizarDemaisParcelasPendentesDoGrupo(Lancamento lancamentoAlvo, LancamentoUpdateDTO dto) {
+        List<Lancamento> pendentesDoGrupo = repository.findByGrupoParcelamentoIdAndStatusAndIdNot(
+                lancamentoAlvo.getGrupoParcelamentoId(),
+                StatusLancamento.PENDENTE,
+                lancamentoAlvo.getId()
+        );
+        if (!pendentesDoGrupo.isEmpty()) {
+            for (Lancamento pendente : pendentesDoGrupo) {
+                pendente.setTipo(lancamentoAlvo.getTipo());
+                pendente.setMeioPagamento(lancamentoAlvo.getMeioPagamento());
+                pendente.setDescricao(lancamentoAlvo.getDescricao());
+                pendente.setValor(lancamentoAlvo.getValor());
+                pendente.setConta(lancamentoAlvo.getConta());
+                pendente.setContaDestino(lancamentoAlvo.getContaDestino());
+                pendente.setCategoria(lancamentoAlvo.getCategoria());
+                pendente.setSubcategoria(lancamentoAlvo.getSubcategoria());
+                pendente.setObservacoes(lancamentoAlvo.getObservacoes());
+                pendente.setDocumentoFiscalId(lancamentoAlvo.getDocumentoFiscalId());
+            }
+            repository.saveAll(pendentesDoGrupo);
+        }
     }
 
     protected void excluirDemaisParcelasPendentesDoGrupo(Lancamento lancamentoAlvo) {

@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import meufinanceiro_api.financeiro.dto.ContaRequestDTO;
 import meufinanceiro_api.financeiro.dto.ContaResponseDTO;
 import meufinanceiro_api.financeiro.dto.ContaResumoDTO;
+import meufinanceiro_api.financeiro.dto.ReajusteSaldoRequestDTO;
+import meufinanceiro_api.financeiro.dto.SaldoMensalResponseDTO;
 import meufinanceiro_api.financeiro.service.ContaService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,6 +39,15 @@ public class ContaController {
         return service.obterResumoContas();
     }
 
+    @Operation(summary = "Saldos mensais (Visão Geral / Dashboard)", description = "Calcula o saldo inicial do mês, o saldo atual e o saldo previsto no fim do mês selecionado, permitindo filtrar por uma conta específica ou consolidar todas as contas ativas.")
+    @GetMapping("/saldos-mensais")
+    public SaldoMensalResponseDTO obterSaldosMensais(
+            @RequestParam(required = false) Integer mes,
+            @RequestParam(required = false) Integer ano,
+            @RequestParam(required = false) Long contaId) {
+        return service.obterSaldosMensais(mes, ano, contaId);
+    }
+
     @Operation(summary = "Buscar conta por ID", description = "Retorna os detalhes de uma conta específica informada pelo identificador único.")
     @GetMapping("/{id}")
     public ContaResponseDTO buscarPorId(@PathVariable Long id) {
@@ -54,10 +65,16 @@ public class ContaController {
         return ResponseEntity.created(uri).body(resposta);
     }
 
-    @Operation(summary = "Atualizar conta", description = "Atualiza os dados da conta (nome, saldo inicial, status padrão ou status ativo).")
+    @Operation(summary = "Atualizar conta", description = "Atualiza os dados da conta (nome, saldo inicial, status padrão ou status ativo) e recalcula o saldo atual com base nos lançamentos efetivados.")
     @PutMapping("/{id}")
     public ContaResponseDTO atualizar(@PathVariable Long id, @Valid @RequestBody ContaRequestDTO dto) {
         return service.atualizar(id, dto);
+    }
+
+    @Operation(summary = "Reajustar saldo atual", description = "Reajusta o saldo atual da conta para o valor informado, gerando automaticamente um lançamento efetivado de ajuste (RECEITA ou DESPESA) caso haja diferença.")
+    @PatchMapping("/{id}/reajustar-saldo")
+    public ContaResponseDTO reajustarSaldoAtual(@PathVariable Long id, @Valid @RequestBody ReajusteSaldoRequestDTO dto) {
+        return service.reajustarSaldoAtual(id, dto);
     }
 
     @Operation(summary = "Inativar conta", description = "Desativa a conta para que não possa ser mais selecionada em novos lançamentos financeiros.")

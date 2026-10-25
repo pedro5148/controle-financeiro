@@ -12,6 +12,6 @@ public interface LancamentoStrategy {
     boolean isApplicable(LancamentoUpdateDTO dto);
     boolean isApplicable(Lancamento lancamento);
     List<LancamentoResponseDTO> processar(LancamentoRequestDTO dto);
-    LancamentoResponseDTO atualizar(Lancamento existente, LancamentoUpdateDTO dto);
+    LancamentoResponseDTO atualizar(Lancamento existente, LancamentoUpdateDTO dto, boolean atualizarPendentesDoGrupo);
     void excluir(Lancamento lancamento, boolean excluirPendentesDoGrupo);
 }

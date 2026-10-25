@@ -19,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Tag(name = "Lançamentos", description = "Endpoints para gerenciamento de lançamentos financeiros (receitas, despesas e transferências)")
@@ -64,20 +65,36 @@ public class LancamentoController {
         return ResponseEntity.status(HttpStatus.CREATED).body(criados);
     }
 
-    @Operation(summary = "Atualizar lançamento", description = "Atualiza um lançamento individual existente, realizando o estorno financeiro automático do estado anterior e aplicando o novo impacto no saldo.")
+    @Operation(summary = "Atualizar lançamento", description = "Atualiza um lançamento existente, realizando o estorno financeiro automático do estado anterior e aplicando o novo impacto no saldo. Se atualizarPendentesDoGrupo=true em um lançamento parcelado, propaga descrição, valor, categoria, subcategoria, observações e conta para as demais parcelas pendentes do mesmo grupo.")
     @PutMapping("/{id}")
     public ResponseEntity<LancamentoResponseDTO> atualizar(
             @PathVariable Long id,
+            @RequestParam(required = false, defaultValue = "false") boolean atualizarPendentesDoGrupo,
             @Valid @RequestBody LancamentoUpdateDTO dto) {
-        return ResponseEntity.ok(lancamentoService.atualizar(id, dto));
+        return ResponseEntity.ok(lancamentoService.atualizar(id, dto, atualizarPendentesDoGrupo));
     }
 
-    @Operation(summary = "Excluir lançamento", description = "Remove fisicamente o lançamento e reverte seu impacto financeiro no saldo da conta caso estivesse efetivado. Se excluirPendentesDoGrupo=true em um lançamento parcelado, exclui também todas as demais parcelas pendentes do mesmo grupo.")
+    @Operation(summary = "Efetivar lançamento (baixa rápida)", description = "Altera rapidamente o status de um lançamento normal PENDENTE para EFETIVADO, aplicando imediatamente o crédito/débito no saldo da conta bancária.")
+    @PatchMapping("/{id}/efetivar")
+    public ResponseEntity<LancamentoResponseDTO> efetivar(
+            @PathVariable Long id,
+            @RequestParam(required = false) LocalDate dataEfetivacao) {
+        return ResponseEntity.ok(lancamentoService.efetivar(id, dataEfetivacao));
+    }
+
+    @Operation(summary = "Reabrir lançamento para pendente (estornar baixa)", description = "Reverte o status de um lançamento normal EFETIVADO para PENDENTE, estornando automaticamente o valor no saldo da conta bancária.")
+    @PatchMapping("/{id}/pendente")
+    public ResponseEntity<LancamentoResponseDTO> marcarComoPendente(@PathVariable Long id) {
+        return ResponseEntity.ok(lancamentoService.marcarComoPendente(id));
+    }
+
+    @Operation(summary = "Excluir lançamento", description = "Remove fisicamente o lançamento e reverte seu impacto financeiro no saldo da conta caso estivesse efetivado. Se excluirPendentesDoGrupo=true em um lançamento parcelado, exclui também todas as demais parcelas pendentes do mesmo grupo. Se excluirProximos=true, exclui a parcela selecionada e as posteriores do mesmo grupo pela numeração das parcelas, preservando as anteriores. A operação é atômica e respeita as restrições das faturas. Os dois parâmetros não podem ser usados juntos.")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void excluir(
             @PathVariable Long id,
-            @RequestParam(required = false, defaultValue = "false") boolean excluirPendentesDoGrupo) {
-        lancamentoService.excluir(id, excluirPendentesDoGrupo);
+            @RequestParam(required = false, defaultValue = "false") boolean excluirPendentesDoGrupo,
+            @RequestParam(required = false, defaultValue = "false") boolean excluirProximos) {
+        lancamentoService.excluir(id, excluirPendentesDoGrupo, excluirProximos);
     }
 }

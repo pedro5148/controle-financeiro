@@ -9,8 +9,11 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +41,10 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
             Long grupoParcelamentoId,
             StatusLancamento status);
 
+    @EntityGraph(attributePaths = { "conta", "contaDestino" })
+    List<Lancamento> findByGrupoParcelamentoIdAndParcelaAtualGreaterThanEqualOrderByParcelaAtualAsc(
+            Long grupoParcelamentoId, Integer parcelaAtual);
+
     boolean existsByCategoriaId(Long categoriaId);
 
     boolean existsBySubcategoriaId(Long subcategoriaId);
@@ -47,4 +54,103 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
     boolean existsByContaDestinoId(Long contaDestinoId);
 
     boolean existsByCartaoCreditoId(Long cartaoCreditoId);
+
+    List<Lancamento> findAllByFaturaId(Long faturaId);
+
+    @Query("""
+            SELECT COALESCE(SUM(l.valor), 0)
+            FROM Lancamento l
+            WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.EFETIVADO
+              AND (
+                  (l.tipo = meufinanceiro_api.financeiro.enums.TipoLancamento.RECEITA AND l.conta.id = :contaId)
+                  OR (l.tipo = meufinanceiro_api.financeiro.enums.TipoLancamento.TRANSFERENCIA AND l.contaDestino.id = :contaId)
+              )
+            """)
+    BigDecimal somarEntradasEfetivadasPorConta(@Param("contaId") Long contaId);
+
+    @Query("""
+            SELECT COALESCE(SUM(l.valor), 0)
+            FROM Lancamento l
+            WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.EFETIVADO
+              AND l.conta.id = :contaId
+              AND l.tipo IN (
+                  meufinanceiro_api.financeiro.enums.TipoLancamento.DESPESA,
+                  meufinanceiro_api.financeiro.enums.TipoLancamento.TRANSFERENCIA
+              )
+            """)
+    BigDecimal somarSaidasEfetivadasPorConta(@Param("contaId") Long contaId);
+
+    @Query("""
+            SELECT COALESCE(SUM(l.valor), 0)
+            FROM Lancamento l
+            LEFT JOIN l.conta co
+            LEFT JOIN l.contaDestino cd
+            WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.EFETIVADO
+              AND l.meioPagamento <> meufinanceiro_api.financeiro.enums.MeioPagamento.CREDITO
+              AND COALESCE(l.dataEfetivacao, l.dataLancamento) >= :dataCorte
+              AND (
+                  (l.tipo = meufinanceiro_api.financeiro.enums.TipoLancamento.RECEITA
+                   AND ((:contaId IS NULL AND co.ativo = true) OR (co.id = :contaId)))
+                  OR
+                  (l.tipo = meufinanceiro_api.financeiro.enums.TipoLancamento.TRANSFERENCIA
+                   AND ((:contaId IS NULL AND cd.ativo = true) OR (cd.id = :contaId)))
+              )
+            """)
+    BigDecimal somarEntradasEfetivadasAPartirDe(
+            @Param("dataCorte") LocalDate dataCorte,
+            @Param("contaId") Long contaId);
+
+    @Query("""
+            SELECT COALESCE(SUM(l.valor), 0)
+            FROM Lancamento l
+            JOIN l.conta co
+            WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.EFETIVADO
+              AND l.meioPagamento <> meufinanceiro_api.financeiro.enums.MeioPagamento.CREDITO
+              AND COALESCE(l.dataEfetivacao, l.dataLancamento) >= :dataCorte
+              AND ((:contaId IS NULL AND co.ativo = true) OR (co.id = :contaId))
+              AND l.tipo IN (
+                  meufinanceiro_api.financeiro.enums.TipoLancamento.DESPESA,
+                  meufinanceiro_api.financeiro.enums.TipoLancamento.TRANSFERENCIA
+              )
+            """)
+    BigDecimal somarSaidasEfetivadasAPartirDe(
+            @Param("dataCorte") LocalDate dataCorte,
+            @Param("contaId") Long contaId);
+
+    @Query("""
+            SELECT COALESCE(SUM(l.valor), 0)
+            FROM Lancamento l
+            LEFT JOIN l.conta co
+            LEFT JOIN l.contaDestino cd
+            WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.PENDENTE
+              AND l.meioPagamento <> meufinanceiro_api.financeiro.enums.MeioPagamento.CREDITO
+              AND l.dataVencimento <= :dataFim
+              AND (
+                  (l.tipo = meufinanceiro_api.financeiro.enums.TipoLancamento.RECEITA
+                   AND ((:contaId IS NULL AND co.ativo = true) OR (co.id = :contaId)))
+                  OR
+                  (l.tipo = meufinanceiro_api.financeiro.enums.TipoLancamento.TRANSFERENCIA
+                   AND ((:contaId IS NULL AND cd.ativo = true) OR (cd.id = :contaId)))
+              )
+            """)
+    BigDecimal somarEntradasPendentesAte(
+            @Param("dataFim") LocalDate dataFim,
+            @Param("contaId") Long contaId);
+
+    @Query("""
+            SELECT COALESCE(SUM(l.valor), 0)
+            FROM Lancamento l
+            JOIN l.conta co
+            WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.PENDENTE
+              AND l.meioPagamento <> meufinanceiro_api.financeiro.enums.MeioPagamento.CREDITO
+              AND l.dataVencimento <= :dataFim
+              AND ((:contaId IS NULL AND co.ativo = true) OR (co.id = :contaId))
+              AND l.tipo IN (
+                  meufinanceiro_api.financeiro.enums.TipoLancamento.DESPESA,
+                  meufinanceiro_api.financeiro.enums.TipoLancamento.TRANSFERENCIA
+              )
+            """)
+    BigDecimal somarSaidasPendentesAte(
+            @Param("dataFim") LocalDate dataFim,
+            @Param("contaId") Long contaId);
 }

@@ -95,6 +95,7 @@ deploy:
         --image="$IMAGE_URL" \
         --region="$GCP_REGION" \
         --project="$GCP_PROJECT_ID" \
+        --scaling=auto \
         --quiet
 
       echo "Conferindo a revisao implantada..."

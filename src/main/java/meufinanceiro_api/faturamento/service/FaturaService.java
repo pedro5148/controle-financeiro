@@ -4,12 +4,22 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import meufinanceiro_api.faturamento.domain.CartaoCredito;
 import meufinanceiro_api.faturamento.domain.Fatura;
+import meufinanceiro_api.faturamento.domain.PagamentoFatura;
 import meufinanceiro_api.faturamento.dto.FaturaResponseDTO;
+import meufinanceiro_api.faturamento.dto.PagamentoFaturaRequestDTO;
+import meufinanceiro_api.faturamento.dto.PagamentoFaturaResponseDTO;
 import meufinanceiro_api.faturamento.enums.StatusFatura;
 import meufinanceiro_api.faturamento.mapper.FaturaMapper;
+import meufinanceiro_api.faturamento.mapper.PagamentoFaturaMapper;
 import meufinanceiro_api.faturamento.repository.CartaoCreditoRepository;
 import meufinanceiro_api.faturamento.repository.FaturaRepository;
+import meufinanceiro_api.faturamento.repository.PagamentoFaturaRepository;
+import meufinanceiro_api.financeiro.domain.Conta;
+import meufinanceiro_api.financeiro.domain.Lancamento;
+import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
+import meufinanceiro_api.financeiro.repository.ContaRepository;
+import meufinanceiro_api.financeiro.repository.LancamentoRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,7 +35,11 @@ public class FaturaService {
 
     private final FaturaRepository faturaRepository;
     private final CartaoCreditoRepository cartaoCreditoRepository;
+    private final PagamentoFaturaRepository pagamentoFaturaRepository;
+    private final ContaRepository contaRepository;
+    private final LancamentoRepository lancamentoRepository;
     private final FaturaMapper faturaMapper;
+    private final PagamentoFaturaMapper pagamentoFaturaMapper;
 
     @Transactional(readOnly = true)
     public List<FaturaResponseDTO> listar(Long cartaoCreditoId, String mesAno, StatusFatura status) {
@@ -134,5 +148,111 @@ public class FaturaService {
         Fatura fatura = buscarEntidadePorId(faturaId);
         fatura.removerValor(valor);
         return faturaRepository.saveAndFlush(fatura);
+    }
+
+    @Transactional
+    public FaturaResponseDTO fecharFatura(Long id) {
+        Fatura fatura = buscarEntidadePorId(id);
+        fatura.fechar();
+
+        if (fatura.getStatus() == StatusFatura.PAGA) {
+            LocalDate dataEfetivacao = pagamentoFaturaRepository
+                    .findFirstByFaturaIdOrderByDataPagamentoDescIdDesc(fatura.getId())
+                    .map(PagamentoFatura::getDataPagamento)
+                    .orElse(LocalDate.now());
+            atualizarStatusLancamentosDaFatura(fatura.getId(), StatusLancamento.EFETIVADO, dataEfetivacao);
+        }
+
+        return faturaMapper.toResponseDTO(faturaRepository.saveAndFlush(fatura));
+    }
+
+    @Transactional
+    public FaturaResponseDTO reabrirFatura(Long id) {
+        Fatura fatura = buscarEntidadePorId(id);
+        fatura.reabrir();
+        return faturaMapper.toResponseDTO(faturaRepository.saveAndFlush(fatura));
+    }
+
+    @Transactional
+    public FaturaResponseDTO pagarFatura(Long id, PagamentoFaturaRequestDTO dto) {
+        Fatura fatura = buscarEntidadePorId(id);
+
+        BigDecimal valorPagamento = (dto != null && dto.valor() != null)
+                ? dto.valor()
+                : fatura.getSaldoRestante();
+
+        Long contaId = (dto != null && dto.contaId() != null)
+                ? dto.contaId()
+                : fatura.getCartao().getContaPadraoId();
+
+        LocalDate dataPagamento = (dto != null && dto.dataPagamento() != null)
+                ? dto.dataPagamento()
+                : LocalDate.now();
+
+        Conta conta = contaRepository.findById(contaId)
+                .orElseThrow(() -> new EntityNotFoundException("Conta bancária para pagamento não encontrada."));
+
+        if (!conta.isAtivo()) {
+            throw new RegraNegocioException("Não é possível realizar o pagamento da fatura utilizando uma conta inativa.");
+        }
+
+        fatura.registrarPagamento(valorPagamento);
+        conta.debitar(valorPagamento);
+
+        PagamentoFatura pagamento = new PagamentoFatura();
+        pagamento.setFatura(fatura);
+        pagamento.setConta(conta);
+        pagamento.setValor(valorPagamento);
+        pagamento.setDataPagamento(dataPagamento);
+        pagamento.setObservacoes(dto != null ? dto.observacoes() : null);
+        pagamentoFaturaRepository.save(pagamento);
+
+        if (fatura.getStatus() == StatusFatura.PAGA) {
+            atualizarStatusLancamentosDaFatura(fatura.getId(), StatusLancamento.EFETIVADO, dataPagamento);
+        }
+
+        contaRepository.save(conta);
+        return faturaMapper.toResponseDTO(faturaRepository.saveAndFlush(fatura));
+    }
+
+    @Transactional(readOnly = true)
+    public List<PagamentoFaturaResponseDTO> listarPagamentos(Long faturaId) {
+        buscarEntidadePorId(faturaId);
+        return pagamentoFaturaRepository.findAllByFaturaIdOrderByDataPagamentoDescIdDesc(faturaId)
+                .stream()
+                .map(pagamentoFaturaMapper::toResponseDTO)
+                .toList();
+    }
+
+    @Transactional
+    public FaturaResponseDTO estornarPagamento(Long faturaId, Long pagamentoId) {
+        Fatura fatura = buscarEntidadePorId(faturaId);
+        PagamentoFatura pagamento = pagamentoFaturaRepository.findByIdAndFaturaId(pagamentoId, faturaId)
+                .orElseThrow(() -> new EntityNotFoundException("Registro de pagamento não encontrado para esta fatura."));
+
+        boolean estavaPaga = fatura.getStatus() == StatusFatura.PAGA;
+
+        Conta conta = pagamento.getConta();
+        conta.creditar(pagamento.getValor());
+        fatura.estornarPagamento(pagamento.getValor());
+
+        if (estavaPaga && fatura.getStatus() != StatusFatura.PAGA) {
+            atualizarStatusLancamentosDaFatura(fatura.getId(), StatusLancamento.PENDENTE, null);
+        }
+
+        pagamentoFaturaRepository.delete(pagamento);
+        contaRepository.save(conta);
+        return faturaMapper.toResponseDTO(faturaRepository.saveAndFlush(fatura));
+    }
+
+    private void atualizarStatusLancamentosDaFatura(Long faturaId, StatusLancamento novoStatus, LocalDate dataEfetivacao) {
+        List<Lancamento> lancamentos = lancamentoRepository.findAllByFaturaId(faturaId);
+        if (!lancamentos.isEmpty()) {
+            for (Lancamento lancamento : lancamentos) {
+                lancamento.setStatus(novoStatus);
+                lancamento.setDataEfetivacao(dataEfetivacao);
+            }
+            lancamentoRepository.saveAll(lancamentos);
+        }
     }
 }
