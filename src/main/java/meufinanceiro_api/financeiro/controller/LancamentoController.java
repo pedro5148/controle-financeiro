@@ -8,6 +8,7 @@ import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoSugestaoDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoUpdateDTO;
+import meufinanceiro_api.financeiro.dto.ResumoMensalResponseDTO;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.service.LancamentoService;
@@ -49,6 +50,15 @@ public class LancamentoController {
 
         return ResponseEntity.ok(lancamentoService.listar(
                 descricao, tipo, status, contaId, categoriaId, subcategoriaId, grupoParcelamentoId, cartaoCreditoId, faturaId, mes, ano, pageable));
+    }
+
+    @Operation(summary = "Resumo mensal de pendências", description = "Retorna a quantidade e o valor total de despesas, receitas e transferências pendentes no mês informado. Cada fatura de cartão de crédito não paga (em aberto/fechada) com saldo restante no mês é contabilizada como 1 registro de despesa pendente com o valor do saldo restante da fatura.")
+    @GetMapping("/resumo-mensal")
+    public ResponseEntity<ResumoMensalResponseDTO> obterResumoMensal(
+            @RequestParam(required = false) Integer mes,
+            @RequestParam(required = false) Integer ano,
+            @RequestParam(required = false) Long contaId) {
+        return ResponseEntity.ok(lancamentoService.obterResumoMensal(mes, ano, contaId));
     }
 
     @Operation(summary = "Sugerir descrições de lançamentos (autocomplete)", description = "Retorna sugestões deduplicadas de descrições de lançamentos anteriores com base em busca parcial e similaridade de trigramas (pg_trgm), incluindo a categoria e subcategoria ativas mais recentes associadas a cada descrição.")

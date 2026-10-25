@@ -2,12 +2,16 @@ package meufinanceiro_api.financeiro.service;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import meufinanceiro_api.faturamento.domain.CartaoCredito;
+import meufinanceiro_api.faturamento.repository.FaturaRepository;
 import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.dto.CategoriaResponseDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoSugestaoDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoUpdateDTO;
+import meufinanceiro_api.financeiro.dto.ResumoMensalResponseDTO;
+import meufinanceiro_api.financeiro.dto.ResumoPendenteTipoDTO;
 import meufinanceiro_api.financeiro.dto.SubcategoriaResponseDTO;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
@@ -24,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 
 @Service
@@ -31,8 +36,75 @@ import java.util.List;
 public class LancamentoService {
 
     private final LancamentoRepository lancamentoRepository;
+    private final FaturaRepository faturaRepository;
     private final LancamentoMapper lancamentoMapper;
     private final List<LancamentoStrategy> lancamentoStrategies;
+
+    @Transactional(readOnly = true)
+    public ResumoMensalResponseDTO obterResumoMensal(Integer mes, Integer ano, Long contaId) {
+        LocalDate hoje = LocalDate.now();
+        int mesFiltro = (mes != null) ? mes : hoje.getMonthValue();
+        int anoFiltro = (ano != null) ? ano : hoje.getYear();
+
+        if (mesFiltro < 1 || mesFiltro > 12) {
+            throw new RegraNegocioException("O mês informado deve estar entre 1 e 12.");
+        }
+
+        YearMonth competencia = YearMonth.of(anoFiltro, mesFiltro);
+        LocalDate inicioMes = competencia.atDay(1);
+        LocalDate fimMes = competencia.atEndOfMonth();
+
+        List<LancamentoRepository.ResumoPendenteTipoProjection> resumosNormais =
+                lancamentoRepository.resumirPendentesNormaisPorPeriodo(inicioMes, fimMes, contaId);
+
+        long qtdDespesas = 0L;
+        BigDecimal valorDespesas = BigDecimal.ZERO;
+
+        long qtdReceitas = 0L;
+        BigDecimal valorReceitas = BigDecimal.ZERO;
+
+        long qtdTransferencias = 0L;
+        BigDecimal valorTransferencias = BigDecimal.ZERO;
+
+        for (LancamentoRepository.ResumoPendenteTipoProjection item : resumosNormais) {
+            long qtd = item.getQuantidade() != null ? item.getQuantidade() : 0L;
+            BigDecimal valor = item.getValorTotal() != null ? item.getValorTotal() : BigDecimal.ZERO;
+
+            switch (item.getTipo()) {
+                case DESPESA -> {
+                    qtdDespesas += qtd;
+                    valorDespesas = valorDespesas.add(valor);
+                }
+                case RECEITA -> {
+                    qtdReceitas += qtd;
+                    valorReceitas = valorReceitas.add(valor);
+                }
+                case TRANSFERENCIA -> {
+                    qtdTransferencias += qtd;
+                    valorTransferencias = valorTransferencias.add(valor);
+                }
+            }
+        }
+
+        String mesAnoFatura = CartaoCredito.formatarMesAno(competencia);
+        FaturaRepository.ResumoFaturaPendenteProjection resumoFaturas =
+                faturaRepository.resumirFaturasPendentesPorMesAno(mesAnoFatura, contaId);
+
+        if (resumoFaturas != null) {
+            long qtdFaturas = resumoFaturas.getQuantidade() != null ? resumoFaturas.getQuantidade() : 0L;
+            BigDecimal valorFaturas = resumoFaturas.getValorTotal() != null ? resumoFaturas.getValorTotal() : BigDecimal.ZERO;
+            qtdDespesas += qtdFaturas;
+            valorDespesas = valorDespesas.add(valorFaturas);
+        }
+
+        return new ResumoMensalResponseDTO(
+                mesFiltro,
+                anoFiltro,
+                new ResumoPendenteTipoDTO(qtdDespesas, valorDespesas),
+                new ResumoPendenteTipoDTO(qtdReceitas, valorReceitas),
+                new ResumoPendenteTipoDTO(qtdTransferencias, valorTransferencias)
+        );
+    }
 
     @Transactional(readOnly = true)
     public Page<LancamentoResponseDTO> listar(

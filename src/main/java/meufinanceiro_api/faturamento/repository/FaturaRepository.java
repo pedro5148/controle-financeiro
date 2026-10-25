@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,5 +45,36 @@ public interface FaturaRepository extends JpaRepository<Fatura, Long> {
     BigDecimal somarLimiteUtilizadoPorCartao(@Param("cartaoId") Long cartaoId);
 
     boolean existsByCartaoId(Long cartaoId);
+
+    interface ResumoFaturaPendenteProjection {
+        Long getQuantidade();
+        BigDecimal getValorTotal();
+    }
+
+    @Query("""
+            SELECT COUNT(f) AS quantidade,
+                   COALESCE(SUM(f.valorTotal - f.valorPago), 0) AS valorTotal
+            FROM Fatura f
+            WHERE f.mesAno = :mesAno
+              AND f.status <> meufinanceiro_api.faturamento.enums.StatusFatura.PAGA
+              AND (f.valorTotal - f.valorPago) > 0
+              AND (:contaId IS NULL OR f.cartao.contaPadraoId = :contaId)
+            """)
+    ResumoFaturaPendenteProjection resumirFaturasPendentesPorMesAno(
+            @Param("mesAno") String mesAno,
+            @Param("contaId") Long contaId);
+
+    @Query("""
+            SELECT COALESCE(SUM(f.valorTotal - f.valorPago), 0)
+            FROM Fatura f
+            JOIN meufinanceiro_api.financeiro.domain.Conta co ON co.id = f.cartao.contaPadraoId
+            WHERE f.status <> meufinanceiro_api.faturamento.enums.StatusFatura.PAGA
+              AND (f.valorTotal - f.valorPago) > 0
+              AND f.dataVencimento <= :dataFim
+              AND ((:contaId IS NULL AND co.ativo = true) OR (co.id = :contaId))
+            """)
+    BigDecimal somarFaturasPendentesAte(
+            @Param("dataFim") LocalDate dataFim,
+            @Param("contaId") Long contaId);
 }
 

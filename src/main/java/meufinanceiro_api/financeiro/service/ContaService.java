@@ -3,6 +3,7 @@ package meufinanceiro_api.financeiro.service;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import meufinanceiro_api.faturamento.repository.CartaoCreditoRepository;
+import meufinanceiro_api.faturamento.repository.FaturaRepository;
 import meufinanceiro_api.faturamento.repository.PagamentoFaturaRepository;
 import meufinanceiro_api.financeiro.domain.Categoria;
 import meufinanceiro_api.financeiro.domain.Conta;
@@ -42,6 +43,7 @@ public class ContaService {
     private final ContaMapper contaMapper;
     private final LancamentoRepository lancamentoRepository;
     private final CartaoCreditoRepository cartaoCreditoRepository;
+    private final FaturaRepository faturaRepository;
     private final PagamentoFaturaRepository pagamentoFaturaRepository;
     private final CategoriaRepository categoriaRepository;
     private final SubcategoriaRepository subcategoriaRepository;
@@ -94,11 +96,15 @@ public class ContaService {
 
         YearMonth competencia = YearMonth.of(anoFiltro, mesFiltro);
         LocalDate inicioMes = competencia.atDay(1);
+        LocalDate fimMesAnterior = inicioMes.minusDays(1);
         LocalDate fimMes = competencia.atEndOfMonth();
         LocalDate aposFimMes = fimMes.plusDays(1);
 
         BigDecimal impactoEfetivadoAPartirDoInicio = calcularImpactoEfetivadoAPartirDe(inicioMes, contaId);
-        BigDecimal saldoInicialMes = saldoAtual.subtract(impactoEfetivadoAPartirDoInicio);
+        BigDecimal impactoPendenteAteMesAnterior = calcularImpactoPendenteAte(fimMesAnterior, contaId);
+        BigDecimal saldoInicialMes = saldoAtual
+                .subtract(impactoEfetivadoAPartirDoInicio)
+                .add(impactoPendenteAteMesAnterior);
 
         BigDecimal impactoEfetivadoAposFimDoMes = calcularImpactoEfetivadoAPartirDe(aposFimMes, contaId);
         BigDecimal impactoPendenteAteFimDoMes = calcularImpactoPendenteAte(fimMes, contaId);
@@ -122,9 +128,11 @@ public class ContaService {
     private BigDecimal calcularImpactoPendenteAte(LocalDate dataFim, Long contaId) {
         BigDecimal entradasPendentes = lancamentoRepository.somarEntradasPendentesAte(dataFim, contaId);
         BigDecimal saidasPendentes = lancamentoRepository.somarSaidasPendentesAte(dataFim, contaId);
+        BigDecimal faturasPendentes = faturaRepository.somarFaturasPendentesAte(dataFim, contaId);
 
         return (entradasPendentes != null ? entradasPendentes : BigDecimal.ZERO)
-                .subtract(saidasPendentes != null ? saidasPendentes : BigDecimal.ZERO);
+                .subtract(saidasPendentes != null ? saidasPendentes : BigDecimal.ZERO)
+                .subtract(faturasPendentes != null ? faturasPendentes : BigDecimal.ZERO);
     }
 
     @Transactional

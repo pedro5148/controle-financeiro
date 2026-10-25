@@ -21,7 +21,7 @@ import static org.mockito.Mockito.*;
 class LancamentoExclusaoTest {
     private final LancamentoRepository repository = mock(LancamentoRepository.class);
     private final LancamentoNormalStrategy strategy = new LancamentoNormalStrategy(repository, null, null, null, null);
-    private final LancamentoService service = new LancamentoService(repository, null, List.of(strategy));
+    private final LancamentoService service = new LancamentoService(repository, null, null, List.of(strategy));
 
     private Lancamento parcela(long id, int numero, TipoLancamento tipo, StatusLancamento status, Conta conta, Conta destino) {
         Lancamento item = new Lancamento();

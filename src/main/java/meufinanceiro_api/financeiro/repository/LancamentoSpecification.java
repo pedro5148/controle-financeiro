@@ -82,15 +82,7 @@ public class LancamentoSpecification {
                     end = LocalDate.of(ano, 12, 31);
                 }
 
-                Predicate filtroCreditoPorVencimento = cb.and(
-                        cb.isNotNull(root.get("cartaoCreditoId")),
-                        cb.between(root.get("dataVencimento"), start, end)
-                );
-                Predicate filtroNormalPorLancamento = cb.and(
-                        cb.isNull(root.get("cartaoCreditoId")),
-                        cb.between(root.get("dataLancamento"), start, end)
-                );
-                predicates.add(cb.or(filtroCreditoPorVencimento, filtroNormalPorLancamento));
+                predicates.add(cb.between(root.get("dataVencimento"), start, end));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));

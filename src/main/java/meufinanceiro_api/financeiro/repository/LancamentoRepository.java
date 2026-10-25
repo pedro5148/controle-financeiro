@@ -3,6 +3,7 @@ package meufinanceiro_api.financeiro.repository;
 import jakarta.annotation.Nullable;
 import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
+import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -151,6 +152,28 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
               )
             """)
     BigDecimal somarSaidasPendentesAte(
+            @Param("dataFim") LocalDate dataFim,
+            @Param("contaId") Long contaId);
+
+    public interface ResumoPendenteTipoProjection {
+        TipoLancamento getTipo();
+        Long getQuantidade();
+        BigDecimal getValorTotal();
+    }
+
+    @Query("""
+            SELECT l.tipo AS tipo,
+                   COUNT(l) AS quantidade,
+                   COALESCE(SUM(l.valor), 0) AS valorTotal
+            FROM Lancamento l
+            WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.PENDENTE
+              AND l.cartaoCreditoId IS NULL
+              AND l.dataVencimento BETWEEN :dataInicio AND :dataFim
+              AND (:contaId IS NULL OR l.conta.id = :contaId)
+            GROUP BY l.tipo
+            """)
+    List<ResumoPendenteTipoProjection> resumirPendentesNormaisPorPeriodo(
+            @Param("dataInicio") LocalDate dataInicio,
             @Param("dataFim") LocalDate dataFim,
             @Param("contaId") Long contaId);
 
