@@ -2,6 +2,7 @@ package meufinanceiro_api.financeiro.repository;
 
 import jakarta.annotation.Nullable;
 import meufinanceiro_api.financeiro.domain.Lancamento;
+import meufinanceiro_api.financeiro.dto.CategoriaSubcategoriaResumoProjection;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import org.springframework.data.domain.Page;
@@ -253,4 +254,32 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
             @Param("termo") String termo,
             @Param("tipo") String tipo,
             @Param("limite") int limite);
+
+    @Query("""
+            SELECT new meufinanceiro_api.financeiro.dto.CategoriaSubcategoriaResumoProjection(
+                c.id,
+                c.nome,
+                s.id,
+                s.nome,
+                COALESCE(SUM(l.valor), 0),
+                COUNT(l.id)
+            )
+            FROM Lancamento l
+            JOIN l.categoria c
+            LEFT JOIN l.subcategoria s
+            LEFT JOIN l.conta co
+            WHERE l.tipo = :tipo
+              AND (:status IS NULL OR l.status = :status)
+              AND (:contaId IS NULL OR co.id = :contaId)
+              AND (:cartaoCreditoId IS NULL OR l.cartaoCreditoId = :cartaoCreditoId)
+              AND l.dataVencimento BETWEEN :dataInicio AND :dataFim
+            GROUP BY c.id, c.nome, s.id, s.nome
+            """)
+    List<CategoriaSubcategoriaResumoProjection> agruparPorCategoriaESubcategoria(
+            @Param("tipo") TipoLancamento tipo,
+            @Param("status") StatusLancamento status,
+            @Param("contaId") Long contaId,
+            @Param("cartaoCreditoId") Long cartaoCreditoId,
+            @Param("dataInicio") LocalDate dataInicio,
+            @Param("dataFim") LocalDate dataFim);
 }
