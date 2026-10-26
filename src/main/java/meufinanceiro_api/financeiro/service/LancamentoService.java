@@ -173,6 +173,11 @@ public class LancamentoService {
         Lancamento existente = lancamentoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado."));
 
+        if (existente.getPagamentoFaturaId() != null) {
+            throw new RegraNegocioException(
+                    "Movimentações de pagamento de fatura não podem ser editadas diretamente. Caso necessário, estorne o pagamento nos detalhes da fatura.");
+        }
+
         LancamentoStrategy strategy = lancamentoStrategies.stream()
                 .filter(s -> s.isApplicable(existente))
                 .findFirst()
@@ -190,6 +195,11 @@ public class LancamentoService {
     public LancamentoResponseDTO efetivar(Long id, LocalDate dataEfetivacao) {
         Lancamento lancamento = lancamentoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado."));
+
+        if (lancamento.getPagamentoFaturaId() != null) {
+            throw new RegraNegocioException(
+                    "Movimentações de pagamento de fatura já nascem efetivadas e são controladas pela fatura.");
+        }
 
         if (lancamento.getCartaoCreditoId() != null) {
             throw new RegraNegocioException(
@@ -228,6 +238,11 @@ public class LancamentoService {
     public LancamentoResponseDTO marcarComoPendente(Long id) {
         Lancamento lancamento = lancamentoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado."));
+
+        if (lancamento.getPagamentoFaturaId() != null) {
+            throw new RegraNegocioException(
+                    "Movimentações de pagamento de fatura não podem ser alteradas para pendente. Para desfazer, estorne o pagamento nos detalhes da fatura.");
+        }
 
         if (lancamento.getCartaoCreditoId() != null) {
             throw new RegraNegocioException(
@@ -268,6 +283,10 @@ public class LancamentoService {
         }
         Lancamento selecionado = lancamentoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado para exclusão."));
+        if (selecionado.getPagamentoFaturaId() != null) {
+            throw new RegraNegocioException(
+                    "Movimentações de pagamento de fatura não podem ser excluídas diretamente. Para desfazer, estorne o pagamento nos detalhes da fatura.");
+        }
         if (selecionado.getGrupoParcelamentoId() == null || selecionado.getParcelaAtual() == null) {
             throw new RegraNegocioException("A exclusão dos próximos lançamentos exige uma parcela de um parcelamento.");
         }
@@ -296,6 +315,11 @@ public class LancamentoService {
                     }
                     throw new EntityNotFoundException("Lançamento não encontrado para exclusão.");
                 });
+
+        if (existente.getPagamentoFaturaId() != null) {
+            throw new RegraNegocioException(
+                    "Movimentações de pagamento de fatura não podem ser excluídas diretamente. Para desfazer, estorne o pagamento nos detalhes da fatura.");
+        }
 
         LancamentoStrategy strategy = lancamentoStrategies.stream()
                 .filter(s -> s.isApplicable(existente))

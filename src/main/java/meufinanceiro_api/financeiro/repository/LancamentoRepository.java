@@ -59,10 +59,13 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
 
     List<Lancamento> findAllByFaturaId(Long faturaId);
 
+    void deleteByPagamentoFaturaId(Long pagamentoFaturaId);
+
     @Query("""
             SELECT COALESCE(SUM(l.valor), 0)
             FROM Lancamento l
             WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.EFETIVADO
+              AND l.pagamentoFaturaId IS NULL
               AND (
                   (l.tipo = meufinanceiro_api.financeiro.enums.TipoLancamento.RECEITA AND l.conta.id = :contaId)
                   OR (l.tipo = meufinanceiro_api.financeiro.enums.TipoLancamento.TRANSFERENCIA AND l.contaDestino.id = :contaId)
@@ -75,6 +78,7 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
             FROM Lancamento l
             WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.EFETIVADO
               AND l.conta.id = :contaId
+              AND l.pagamentoFaturaId IS NULL
               AND l.tipo IN (
                   meufinanceiro_api.financeiro.enums.TipoLancamento.DESPESA,
                   meufinanceiro_api.financeiro.enums.TipoLancamento.TRANSFERENCIA
@@ -89,6 +93,7 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
             LEFT JOIN l.contaDestino cd
             WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.EFETIVADO
               AND l.cartaoCreditoId IS NULL
+              AND l.pagamentoFaturaId IS NULL
               AND COALESCE(l.dataEfetivacao, l.dataLancamento) >= :dataCorte
               AND (
                   (l.tipo = meufinanceiro_api.financeiro.enums.TipoLancamento.RECEITA
@@ -108,6 +113,7 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
             JOIN l.conta co
             WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.EFETIVADO
               AND l.cartaoCreditoId IS NULL
+              AND l.pagamentoFaturaId IS NULL
               AND COALESCE(l.dataEfetivacao, l.dataLancamento) >= :dataCorte
               AND ((:contaId IS NULL AND co.ativo = true) OR (co.id = :contaId))
               AND l.tipo IN (
@@ -126,6 +132,7 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
             LEFT JOIN l.contaDestino cd
             WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.PENDENTE
               AND l.cartaoCreditoId IS NULL
+              AND l.pagamentoFaturaId IS NULL
               AND l.dataVencimento <= :dataFim
               AND (
                   (l.tipo = meufinanceiro_api.financeiro.enums.TipoLancamento.RECEITA
@@ -145,6 +152,7 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
             JOIN l.conta co
             WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.PENDENTE
               AND l.cartaoCreditoId IS NULL
+              AND l.pagamentoFaturaId IS NULL
               AND l.dataVencimento <= :dataFim
               AND ((:contaId IS NULL AND co.ativo = true) OR (co.id = :contaId))
               AND l.tipo IN (
@@ -169,6 +177,7 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
             FROM Lancamento l
             WHERE l.status = meufinanceiro_api.financeiro.enums.StatusLancamento.PENDENTE
               AND l.cartaoCreditoId IS NULL
+              AND l.pagamentoFaturaId IS NULL
               AND l.dataVencimento BETWEEN :dataInicio AND :dataFim
               AND (:contaId IS NULL OR l.conta.id = :contaId)
             GROUP BY l.tipo
@@ -206,6 +215,7 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
                 JOIN categorias c ON c.id = l.categoria_id
                 LEFT JOIN subcategorias s ON s.id = l.subcategoria_id
                 WHERE (:tipo IS NULL OR l.tipo = :tipo)
+                  AND l.pagamento_fatura_id IS NULL
                   AND (
                       l.descricao ILIKE CONCAT('%', :termo, '%')
                       OR (
@@ -269,6 +279,7 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
             LEFT JOIN l.subcategoria s
             LEFT JOIN l.conta co
             WHERE l.tipo = :tipo
+              AND l.pagamentoFaturaId IS NULL
               AND (:status IS NULL OR l.status = :status)
               AND (:contaId IS NULL OR co.id = :contaId)
               AND (:cartaoCreditoId IS NULL OR l.cartaoCreditoId = :cartaoCreditoId)

@@ -14,12 +14,12 @@ import meufinanceiro_api.financeiro.dto.ContaResponseDTO;
 import meufinanceiro_api.financeiro.dto.ContaResumoDTO;
 import meufinanceiro_api.financeiro.dto.ReajusteSaldoRequestDTO;
 import meufinanceiro_api.financeiro.dto.SaldoMensalResponseDTO;
+import meufinanceiro_api.financeiro.enums.CategoriaSistema;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.enums.TipoRecorrencia;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
 import meufinanceiro_api.financeiro.mapper.ContaMapper;
-import meufinanceiro_api.financeiro.repository.CategoriaRepository;
 import meufinanceiro_api.financeiro.repository.ContaRepository;
 import meufinanceiro_api.financeiro.repository.LancamentoRepository;
 import meufinanceiro_api.financeiro.repository.SubcategoriaRepository;
@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ContaService {
 
-    private static final String CATEGORIA_PADRAO_AJUSTE = "Ajuste de Saldo";
     private static final String DESCRICAO_PADRAO_AJUSTE = "Reajuste de saldo";
 
     private final ContaRepository contaRepository;
@@ -45,7 +44,7 @@ public class ContaService {
     private final CartaoCreditoRepository cartaoCreditoRepository;
     private final FaturaRepository faturaRepository;
     private final PagamentoFaturaRepository pagamentoFaturaRepository;
-    private final CategoriaRepository categoriaRepository;
+    private final CategoriaService categoriaService;
     private final SubcategoriaRepository subcategoriaRepository;
 
     @Transactional(readOnly = true)
@@ -218,7 +217,7 @@ public class ContaService {
         BigDecimal diferenca = dto.novoSaldoAtual().subtract(saldoAtualReal);
 
         if (diferenca.compareTo(BigDecimal.ZERO) != 0) {
-            Categoria categoria = obterOuCriarCategoriaAjuste(dto.categoriaId());
+            Categoria categoria = categoriaService.obterCategoriaAtivaOuSistema(dto.categoriaId(), CategoriaSistema.AJUSTE_SALDO);
             Subcategoria subcategoria = obterSubcategoriaAjuste(dto.subcategoriaId(), categoria.getId());
 
             String descricao = (dto.descricao() != null && !dto.descricao().isBlank())
@@ -260,32 +259,6 @@ public class ContaService {
                 .add(entradas != null ? entradas : BigDecimal.ZERO)
                 .subtract(saidas != null ? saidas : BigDecimal.ZERO)
                 .subtract(pagamentosFatura != null ? pagamentosFatura : BigDecimal.ZERO);
-    }
-
-    private Categoria obterOuCriarCategoriaAjuste(Long categoriaId) {
-        if (categoriaId != null) {
-            Categoria categoria = categoriaRepository.findById(categoriaId)
-                    .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada."));
-            if (!categoria.isAtivo()) {
-                throw new RegraNegocioException("Não é possível utilizar uma categoria inativa para o reajuste de saldo.");
-            }
-            return categoria;
-        }
-
-        return categoriaRepository.findByNomeIgnoreCase(CATEGORIA_PADRAO_AJUSTE)
-                .map(cat -> {
-                    if (!cat.isAtivo()) {
-                        cat.setAtivo(true);
-                        return categoriaRepository.save(cat);
-                    }
-                    return cat;
-                })
-                .orElseGet(() -> {
-                    Categoria nova = new Categoria();
-                    nova.setNome(CATEGORIA_PADRAO_AJUSTE);
-                    nova.setAtivo(true);
-                    return categoriaRepository.save(nova);
-                });
     }
 
     private Subcategoria obterSubcategoriaAjuste(Long subcategoriaId, Long categoriaId) {

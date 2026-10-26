@@ -34,6 +34,7 @@ public record LancamentoResponseDTO(
         // Soft Links com Módulo de Faturamento
         Long cartaoCreditoId,
         Long faturaId,
+        Long pagamentoFaturaId,
 
         // Soft Link com Módulo Fiscal
         Long documentoFiscalId

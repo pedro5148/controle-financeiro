@@ -14,12 +14,17 @@ import meufinanceiro_api.faturamento.mapper.PagamentoFaturaMapper;
 import meufinanceiro_api.faturamento.repository.CartaoCreditoRepository;
 import meufinanceiro_api.faturamento.repository.FaturaRepository;
 import meufinanceiro_api.faturamento.repository.PagamentoFaturaRepository;
+import meufinanceiro_api.financeiro.domain.Categoria;
 import meufinanceiro_api.financeiro.domain.Conta;
 import meufinanceiro_api.financeiro.domain.Lancamento;
+import meufinanceiro_api.financeiro.enums.CategoriaSistema;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
+import meufinanceiro_api.financeiro.enums.TipoLancamento;
+import meufinanceiro_api.financeiro.enums.TipoRecorrencia;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
 import meufinanceiro_api.financeiro.repository.ContaRepository;
 import meufinanceiro_api.financeiro.repository.LancamentoRepository;
+import meufinanceiro_api.financeiro.service.CategoriaService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +42,7 @@ public class FaturaService {
     private final CartaoCreditoRepository cartaoCreditoRepository;
     private final PagamentoFaturaRepository pagamentoFaturaRepository;
     private final ContaRepository contaRepository;
+    private final CategoriaService categoriaService;
     private final LancamentoRepository lancamentoRepository;
     private final FaturaMapper faturaMapper;
     private final PagamentoFaturaMapper pagamentoFaturaMapper;
@@ -90,10 +96,6 @@ public class FaturaService {
         }
     }
 
-    /**
-     * Resolve a fatura ABERTA correspondente à data da compra e ao deslocamento de meses (para parcelas).
-     * Se a fatura calculada para a 1ª parcela já estiver FECHADA ou PAGA, aloca automaticamente na próxima fatura ABERTA.
-     */
     @Transactional
     public Fatura obterOuCriarFaturaAbertaParaCompra(CartaoCredito cartao, LocalDate dataCompra, int offsetMeses) {
         YearMonth competenciaBase = cartao.calcularCompetenciaFatura(dataCompra);
@@ -176,25 +178,15 @@ public class FaturaService {
     @Transactional
     public FaturaResponseDTO pagarFatura(Long id, PagamentoFaturaRequestDTO dto) {
         Fatura fatura = buscarEntidadePorId(id);
+        Conta conta = obterContaAtivaParaPagamento(fatura, dto);
 
         BigDecimal valorPagamento = (dto != null && dto.valor() != null)
                 ? dto.valor()
                 : fatura.getSaldoRestante();
 
-        Long contaId = (dto != null && dto.contaId() != null)
-                ? dto.contaId()
-                : fatura.getCartao().getContaPadraoId();
-
         LocalDate dataPagamento = (dto != null && dto.dataPagamento() != null)
                 ? dto.dataPagamento()
                 : LocalDate.now();
-
-        Conta conta = contaRepository.findById(contaId)
-                .orElseThrow(() -> new EntityNotFoundException("Conta bancária para pagamento não encontrada."));
-
-        if (!conta.isAtivo()) {
-            throw new RegraNegocioException("Não é possível realizar o pagamento da fatura utilizando uma conta inativa.");
-        }
 
         fatura.registrarPagamento(valorPagamento);
         conta.debitar(valorPagamento);
@@ -205,7 +197,9 @@ public class FaturaService {
         pagamento.setValor(valorPagamento);
         pagamento.setDataPagamento(dataPagamento);
         pagamento.setObservacoes(dto != null ? dto.observacoes() : null);
-        pagamentoFaturaRepository.save(pagamento);
+        PagamentoFatura pagamentoSalvo = pagamentoFaturaRepository.save(pagamento);
+
+        registrarLancamentoPagamentoFatura(pagamentoSalvo, fatura);
 
         if (fatura.getStatus() == StatusFatura.PAGA) {
             atualizarStatusLancamentosDaFatura(fatura.getId(), StatusLancamento.EFETIVADO, dataPagamento);
@@ -240,9 +234,60 @@ public class FaturaService {
             atualizarStatusLancamentosDaFatura(fatura.getId(), StatusLancamento.PENDENTE, null);
         }
 
+        lancamentoRepository.deleteByPagamentoFaturaId(pagamento.getId());
         pagamentoFaturaRepository.delete(pagamento);
         contaRepository.save(conta);
         return faturaMapper.toResponseDTO(faturaRepository.saveAndFlush(fatura));
+    }
+
+    private Conta obterContaAtivaParaPagamento(Fatura fatura, PagamentoFaturaRequestDTO dto) {
+        Long contaId = (dto != null && dto.contaId() != null)
+                ? dto.contaId()
+                : fatura.getCartao().getContaPadraoId();
+
+        Conta conta = contaRepository.findById(contaId)
+                .orElseThrow(() -> new EntityNotFoundException("Conta bancária para pagamento não encontrada."));
+
+        if (!conta.isAtivo()) {
+            throw new RegraNegocioException("Não é possível realizar o pagamento da fatura utilizando uma conta inativa.");
+        }
+        return conta;
+    }
+
+    private void registrarLancamentoPagamentoFatura(PagamentoFatura pagamento, Fatura fatura) {
+        Categoria categoria = categoriaService.obterOuCriarCategoriaSistema(CategoriaSistema.PAGAMENTO_FATURA);
+
+        boolean ehParcial = pagamento.getValor().compareTo(fatura.getValorTotal()) < 0;
+        String prefixo = ehParcial
+                ? (fatura.getSaldoRestante().compareTo(BigDecimal.ZERO) > 0
+                        ? "Pagamento parcial fatura "
+                        : "Pagamento complementar fatura ")
+                : "Pagamento fatura ";
+
+        String descricao = prefixo + fatura.getMesAno() + " - " + fatura.getCartao().getNome();
+        if (descricao.length() > 100) {
+            descricao = descricao.substring(0, 100);
+        }
+
+        LocalDate data = pagamento.getDataPagamento();
+
+        Lancamento lancamento = new Lancamento();
+        lancamento.setTipo(TipoLancamento.DESPESA);
+        lancamento.setDescricao(descricao);
+        lancamento.setValor(pagamento.getValor());
+        lancamento.setConta(pagamento.getConta());
+        lancamento.setCategoria(categoria);
+        lancamento.setDataLancamento(data);
+        lancamento.setDataVencimento(data);
+        lancamento.setDataEfetivacao(data);
+        lancamento.setStatus(StatusLancamento.EFETIVADO);
+        lancamento.setTipoRecorrencia(TipoRecorrencia.NENHUMA);
+        lancamento.setParcelaAtual(1);
+        lancamento.setTotalParcelas(1);
+        lancamento.setObservacoes(pagamento.getObservacoes());
+        lancamento.setPagamentoFaturaId(pagamento.getId());
+
+        lancamentoRepository.save(lancamento);
     }
 
     private void atualizarStatusLancamentosDaFatura(Long faturaId, StatusLancamento novoStatus, LocalDate dataEfetivacao) {

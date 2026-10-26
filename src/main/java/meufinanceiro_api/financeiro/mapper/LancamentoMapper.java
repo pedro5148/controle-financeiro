@@ -24,6 +24,7 @@ public interface LancamentoMapper {
     @Mapping(target = "totalParcelas", ignore = true)
     @Mapping(target = "grupoParcelamentoId", ignore = true)
     @Mapping(target = "faturaId", ignore = true)
+    @Mapping(target = "pagamentoFaturaId", ignore = true)
     Lancamento toEntity(LancamentoRequestDTO dto);
 
     @Mapping(target = "categoria", qualifiedByName = "semSubcategorias")
@@ -39,5 +40,6 @@ public interface LancamentoMapper {
     @Mapping(target = "totalParcelas", ignore = true)
     @Mapping(target = "grupoParcelamentoId", ignore = true)
     @Mapping(target = "faturaId", ignore = true)
+    @Mapping(target = "pagamentoFaturaId", ignore = true)
     void atualizarEntidade(LancamentoUpdateDTO dto, @MappingTarget Lancamento entidade);
 }

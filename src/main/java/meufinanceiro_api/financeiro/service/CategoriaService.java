@@ -7,6 +7,7 @@ import meufinanceiro_api.financeiro.domain.Subcategoria;
 import meufinanceiro_api.financeiro.dto.CategoriaRequestDTO;
 import meufinanceiro_api.financeiro.dto.CategoriaResponseDTO;
 import meufinanceiro_api.financeiro.dto.CategoriaUpdateDTO;
+import meufinanceiro_api.financeiro.enums.CategoriaSistema;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
 import meufinanceiro_api.financeiro.mapper.CategoriaMapper;
 import meufinanceiro_api.financeiro.repository.CategoriaRepository;
@@ -107,5 +108,37 @@ public class CategoriaService {
         }
 
         categoriaRepository.delete(existente);
+    }
+
+    @Transactional
+    public Categoria obterOuCriarCategoriaSistema(CategoriaSistema categoriaSistema) {
+        String nomePadrao = categoriaSistema.getNomePadrao();
+        return categoriaRepository.findByNomeIgnoreCase(nomePadrao)
+                .map(cat -> {
+                    if (!cat.isAtivo()) {
+                        cat.setAtivo(true);
+                        return categoriaRepository.save(cat);
+                    }
+                    return cat;
+                })
+                .orElseGet(() -> {
+                    Categoria nova = new Categoria();
+                    nova.setNome(nomePadrao);
+                    nova.setAtivo(true);
+                    return categoriaRepository.save(nova);
+                });
+    }
+
+    @Transactional
+    public Categoria obterCategoriaAtivaOuSistema(Long categoriaId, CategoriaSistema padraoSistema) {
+        if (categoriaId != null) {
+            Categoria categoria = categoriaRepository.findById(categoriaId)
+                    .orElseThrow(() -> new EntityNotFoundException("Categoria não encontrada."));
+            if (!categoria.isAtivo()) {
+                throw new RegraNegocioException("Não é possível utilizar uma categoria inativa.");
+            }
+            return categoria;
+        }
+        return obterOuCriarCategoriaSistema(padraoSistema);
     }
 }

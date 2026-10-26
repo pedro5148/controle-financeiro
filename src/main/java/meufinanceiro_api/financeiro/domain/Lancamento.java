@@ -97,4 +97,7 @@ public class Lancamento {
     @Column(name = "fatura_id")
     private Long faturaId;
 
+    @Column(name = "pagamento_fatura_id")
+    private Long pagamentoFaturaId;
+
 }
