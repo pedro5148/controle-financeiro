@@ -2,6 +2,7 @@ package meufinanceiro_api.financeiro.service.strategy;
 
 import meufinanceiro_api.faturamento.domain.CartaoCredito;
 import meufinanceiro_api.faturamento.domain.Fatura;
+import meufinanceiro_api.faturamento.service.CartaoCreditoService;
 import meufinanceiro_api.faturamento.service.FaturaService;
 import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
@@ -26,6 +27,7 @@ import java.util.List;
 @Service
 public class LancamentoCreditoStrategy extends AbstractLancamentoStrategy {
 
+    private final CartaoCreditoService cartaoCreditoService;
     private final FaturaService faturaService;
 
     public LancamentoCreditoStrategy(
@@ -34,8 +36,10 @@ public class LancamentoCreditoStrategy extends AbstractLancamentoStrategy {
             CategoriaRepository categoriaRepository,
             SubcategoriaRepository subcategoriaRepository,
             LancamentoMapper mapper,
+            CartaoCreditoService cartaoCreditoService,
             FaturaService faturaService) {
         super(repository, contaRepository, categoriaRepository, subcategoriaRepository, mapper);
+        this.cartaoCreditoService = cartaoCreditoService;
         this.faturaService = faturaService;
     }
 
@@ -63,8 +67,8 @@ public class LancamentoCreditoStrategy extends AbstractLancamentoStrategy {
     protected void preencherEntidadesEspecificasAtualizacao(Lancamento lancamento, LancamentoUpdateDTO dto) {
         validarEPreencherRegrasCredito(lancamento, dto.cartaoCreditoId());
 
-        CartaoCredito cartao = faturaService.obterCartaoAtivo(lancamento.getCartaoCreditoId());
-        faturaService.validarLimiteDisponivel(cartao, lancamento.getValor());
+        CartaoCredito cartao = cartaoCreditoService.obterCartaoAtivo(lancamento.getCartaoCreditoId());
+        cartaoCreditoService.validarLimiteDisponivel(cartao, lancamento.getValor());
 
         int offsetMeses = (lancamento.getParcelaAtual() != null && lancamento.getParcelaAtual() > 1)
                 ? lancamento.getParcelaAtual() - 1
@@ -104,7 +108,7 @@ public class LancamentoCreditoStrategy extends AbstractLancamentoStrategy {
 
     @Override
     protected List<Lancamento> gerarESalvarLancamentos(Lancamento lancamentoBase, LancamentoRequestDTO dto) {
-        CartaoCredito cartao = faturaService.obterCartaoAtivo(lancamentoBase.getCartaoCreditoId());
+        CartaoCredito cartao = cartaoCreditoService.obterCartaoAtivo(lancamentoBase.getCartaoCreditoId());
         List<Lancamento> lancamentosSalvos = new ArrayList<>();
 
         if (lancamentoBase.getTipoRecorrencia() == TipoRecorrencia.PARCELADO) {
@@ -125,7 +129,7 @@ public class LancamentoCreditoStrategy extends AbstractLancamentoStrategy {
                 valorTotalCompra = valorInformado;
             }
 
-            faturaService.validarLimiteDisponivel(cartao, valorTotalCompra);
+            cartaoCreditoService.validarLimiteDisponivel(cartao, valorTotalCompra);
 
             Long grupoId = null;
 
@@ -156,7 +160,7 @@ public class LancamentoCreditoStrategy extends AbstractLancamentoStrategy {
                 lancamentosSalvos.add(salvo);
             }
         } else {
-            faturaService.validarLimiteDisponivel(cartao, lancamentoBase.getValor());
+            cartaoCreditoService.validarLimiteDisponivel(cartao, lancamentoBase.getValor());
 
             lancamentoBase.setParcelaAtual(1);
             lancamentoBase.setTotalParcelas(1);
@@ -224,10 +228,10 @@ public class LancamentoCreditoStrategy extends AbstractLancamentoStrategy {
             return;
         }
 
-        CartaoCredito cartao = faturaService.obterCartaoAtivo(lancamentoAlvo.getCartaoCreditoId());
+        CartaoCredito cartao = cartaoCreditoService.obterCartaoAtivo(lancamentoAlvo.getCartaoCreditoId());
         BigDecimal valorTotalAdicional = lancamentoAlvo.getValor()
                 .multiply(BigDecimal.valueOf(parcelasEmFaturaAberta.size()));
-        faturaService.validarLimiteDisponivel(cartao, valorTotalAdicional);
+        cartaoCreditoService.validarLimiteDisponivel(cartao, valorTotalAdicional);
 
         for (Lancamento pendente : parcelasEmFaturaAberta) {
             boolean mudouCartao = !lancamentoAlvo.getCartaoCreditoId().equals(pendente.getCartaoCreditoId());

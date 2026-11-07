@@ -44,6 +44,21 @@ public interface FaturaRepository extends JpaRepository<Fatura, Long> {
             """)
     BigDecimal somarLimiteUtilizadoPorCartao(@Param("cartaoId") Long cartaoId);
 
+    interface LimiteUtilizadoCartaoProjection {
+        Long getCartaoId();
+        BigDecimal getLimiteUtilizado();
+    }
+
+    @Query("""
+            SELECT f.cartao.id AS cartaoId,
+                   COALESCE(SUM(f.valorTotal - f.valorPago), 0) AS limiteUtilizado
+            FROM Fatura f
+            WHERE f.cartao.id IN :cartaoIds
+              AND f.status <> meufinanceiro_api.faturamento.enums.StatusFatura.PAGA
+            GROUP BY f.cartao.id
+            """)
+    List<LimiteUtilizadoCartaoProjection> somarLimitesUtilizadosPorCartoes(@Param("cartaoIds") List<Long> cartaoIds);
+
     boolean existsByCartaoId(Long cartaoId);
 
     interface ResumoFaturaPendenteProjection {

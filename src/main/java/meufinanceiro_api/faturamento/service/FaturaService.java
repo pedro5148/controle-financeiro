@@ -11,7 +11,6 @@ import meufinanceiro_api.faturamento.dto.PagamentoFaturaResponseDTO;
 import meufinanceiro_api.faturamento.enums.StatusFatura;
 import meufinanceiro_api.faturamento.mapper.FaturaMapper;
 import meufinanceiro_api.faturamento.mapper.PagamentoFaturaMapper;
-import meufinanceiro_api.faturamento.repository.CartaoCreditoRepository;
 import meufinanceiro_api.faturamento.repository.FaturaRepository;
 import meufinanceiro_api.faturamento.repository.PagamentoFaturaRepository;
 import meufinanceiro_api.financeiro.domain.Categoria;
@@ -39,7 +38,6 @@ import java.util.Optional;
 public class FaturaService {
 
     private final FaturaRepository faturaRepository;
-    private final CartaoCreditoRepository cartaoCreditoRepository;
     private final PagamentoFaturaRepository pagamentoFaturaRepository;
     private final ContaRepository contaRepository;
     private final CategoriaService categoriaService;
@@ -66,34 +64,6 @@ public class FaturaService {
     public Fatura buscarEntidadePorId(Long id) {
         return faturaRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Fatura não encontrada."));
-    }
-
-    @Transactional(readOnly = true)
-    public CartaoCredito obterCartaoAtivo(Long cartaoCreditoId) {
-        CartaoCredito cartao = cartaoCreditoRepository.findById(cartaoCreditoId)
-                .orElseThrow(() -> new EntityNotFoundException("Cartão de crédito não encontrado."));
-        if (!cartao.isAtivo()) {
-            throw new RegraNegocioException("Não é possível realizar lançamentos em um cartão de crédito inativo.");
-        }
-        return cartao;
-    }
-
-    @Transactional(readOnly = true)
-    public void validarLimiteDisponivel(CartaoCredito cartao, BigDecimal valorAdicional) {
-        if (valorAdicional == null || valorAdicional.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
-        }
-        BigDecimal limiteUtilizado = faturaRepository.somarLimiteUtilizadoPorCartao(cartao.getId());
-        if (limiteUtilizado == null) {
-            limiteUtilizado = BigDecimal.ZERO;
-        }
-        BigDecimal limiteDisponivel = cartao.getLimiteTotal().subtract(limiteUtilizado);
-        if (valorAdicional.compareTo(limiteDisponivel) > 0) {
-            throw new RegraNegocioException(
-                    String.format("Limite insuficiente no cartão '%s'. Limite disponível: R$ %s, valor da compra: R$ %s.",
-                            cartao.getNome(), limiteDisponivel, valorAdicional)
-            );
-        }
     }
 
     @Transactional

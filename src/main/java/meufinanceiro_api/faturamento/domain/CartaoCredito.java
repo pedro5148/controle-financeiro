@@ -2,6 +2,7 @@ package meufinanceiro_api.faturamento.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
+import meufinanceiro_api.financeiro.exception.RegraNegocioException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -51,6 +52,71 @@ public class CartaoCredito {
     @Version
     @Column(name = "versao", columnDefinition = "bigint default 0")
     private Long versao = 0L;
+
+    public BigDecimal calcularLimiteDisponivel(BigDecimal limiteUtilizado) {
+        BigDecimal total = (this.limiteTotal != null) ? this.limiteTotal : BigDecimal.ZERO;
+        BigDecimal utilizado = (limiteUtilizado != null) ? limiteUtilizado : BigDecimal.ZERO;
+        return total.subtract(utilizado);
+    }
+
+    public void validarAtivoParaLancamento() {
+        if (!this.ativo) {
+            throw new RegraNegocioException("Não é possível realizar lançamentos em um cartão de crédito inativo.");
+        }
+    }
+
+    public void validarLimiteDisponivel(BigDecimal limiteUtilizado, BigDecimal valorAdicional) {
+        if (valorAdicional == null || valorAdicional.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        BigDecimal disponivel = calcularLimiteDisponivel(limiteUtilizado);
+        if (valorAdicional.compareTo(disponivel) > 0) {
+            throw new RegraNegocioException(
+                    String.format("Limite insuficiente no cartão '%s'. Limite disponível: R$ %s, valor da compra: R$ %s.",
+                            this.nome, disponivel, valorAdicional)
+            );
+        }
+    }
+
+    public void configurarEstadoInicial(boolean principal, boolean ativo) {
+        if (principal && !ativo) {
+            throw new RegraNegocioException("Não é possível cadastrar um cartão de crédito principal como inativo.");
+        }
+        this.principal = principal;
+        this.ativo = ativo;
+    }
+
+    public void atualizarPrincipal(boolean novoPrincipal) {
+        if (this.principal && !novoPrincipal) {
+            throw new RegraNegocioException("Não é possível desmarcar o cartão principal. Defina outro cartão como principal para transferir essa configuração.");
+        }
+        this.principal = novoPrincipal;
+    }
+
+    public void atualizarAtivo(boolean novoAtivo) {
+        if (!novoAtivo) {
+            inativar();
+        } else {
+            ativar();
+        }
+    }
+
+    public void inativar() {
+        if (this.principal) {
+            throw new RegraNegocioException("Não é possível inativar o cartão principal. Defina outro cartão como principal antes de inativá-lo.");
+        }
+        this.ativo = false;
+    }
+
+    public void ativar() {
+        this.ativo = true;
+    }
+
+    public void validarExclusao() {
+        if (this.principal) {
+            throw new RegraNegocioException("Não é possível excluir o cartão principal. Defina outro cartão como principal antes de excluí-lo.");
+        }
+    }
 
     /**
      * Calcula a competência (YearMonth de vencimento) da fatura base para uma compra realizada na data informada.

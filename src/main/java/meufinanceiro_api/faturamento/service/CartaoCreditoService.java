@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -34,16 +36,52 @@ public class CartaoCreditoService {
                 ? cartaoCreditoRepository.findAllByAtivoTrueOrderByPrincipalDescNomeAsc()
                 : cartaoCreditoRepository.findAllByOrderByPrincipalDescNomeAsc();
 
+        if (cartoes.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> cartaoIds = cartoes.stream().map(CartaoCredito::getId).toList();
+        Map<Long, BigDecimal> limitesPorCartao = faturaRepository.somarLimitesUtilizadosPorCartoes(cartaoIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        FaturaRepository.LimiteUtilizadoCartaoProjection::getCartaoId,
+                        p -> p.getLimiteUtilizado() != null ? p.getLimiteUtilizado() : BigDecimal.ZERO
+                ));
+
         return cartoes.stream()
-                .map(this::montarResponseComLimites)
+                .map(cartao -> montarResponseComLimite(
+                        cartao,
+                        limitesPorCartao.getOrDefault(cartao.getId(), BigDecimal.ZERO)
+                ))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public CartaoCreditoResponseDTO buscarPorId(Long id) {
-        CartaoCredito cartao = cartaoCreditoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Cartão de crédito não encontrado."));
+        CartaoCredito cartao = buscarEntidadePorId(id);
         return montarResponseComLimites(cartao);
+    }
+
+    @Transactional(readOnly = true)
+    public CartaoCredito buscarEntidadePorId(Long id) {
+        return cartaoCreditoRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Cartão de crédito não encontrado."));
+    }
+
+    @Transactional(readOnly = true)
+    public CartaoCredito obterCartaoAtivo(Long cartaoCreditoId) {
+        CartaoCredito cartao = buscarEntidadePorId(cartaoCreditoId);
+        cartao.validarAtivoParaLancamento();
+        return cartao;
+    }
+
+    @Transactional(readOnly = true)
+    public void validarLimiteDisponivel(CartaoCredito cartao, BigDecimal valorAdicional) {
+        if (valorAdicional == null || valorAdicional.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        BigDecimal limiteUtilizado = obterLimiteUtilizado(cartao.getId());
+        cartao.validarLimiteDisponivel(limiteUtilizado, valorAdicional);
     }
 
     @Transactional
@@ -58,54 +96,47 @@ public class CartaoCreditoService {
 
         boolean ehPrimeiroCartao = cartaoCreditoRepository.count() == 0;
         boolean ehPrincipal = ehPrimeiroCartao || Boolean.TRUE.equals(dto.principal());
-        cartao.setPrincipal(ehPrincipal);
-
         boolean ativo = dto.ativo() == null || dto.ativo();
-        cartao.setAtivo(ativo);
+
+        cartao.configurarEstadoInicial(ehPrincipal, ativo);
 
         if (ehPrincipal && !ehPrimeiroCartao) {
             cartaoCreditoRepository.removerFlagPrincipalDeOutrosCartoes(null);
         }
 
         CartaoCredito salvo = cartaoCreditoRepository.save(cartao);
-        return montarResponseComLimites(salvo);
+        return montarResponseComLimite(salvo, BigDecimal.ZERO);
     }
 
     @Transactional
     public CartaoCreditoResponseDTO atualizar(Long id, CartaoCreditoRequestDTO dto) {
-        CartaoCredito existente = cartaoCreditoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Cartão de crédito não encontrado."));
-
         if (cartaoCreditoRepository.existsByNomeIgnoreCaseAndIdNot(dto.nome(), id)) {
             throw new RegraNegocioException("Já existe um cartão de crédito com o nome informado.");
         }
 
         validarContaPadrao(dto.contaPadraoId());
 
-        existente.setNome(dto.nome());
-        existente.setLimiteTotal(dto.limiteTotal());
-        existente.setDiaFechamento(dto.diaFechamento());
-        existente.setDiaVencimento(dto.diaVencimento());
-        existente.setContaPadraoId(dto.contaPadraoId());
-        existente.setBandeira(dto.bandeira());
+        CartaoCredito existente = buscarEntidadePorId(id);
+        boolean promoverAPrincipal = Boolean.TRUE.equals(dto.principal()) && !existente.isPrincipal();
 
         if (dto.principal() != null) {
-            if (existente.isPrincipal() && !dto.principal()) {
-                throw new RegraNegocioException("Não é possível desmarcar o cartão principal. Defina outro cartão como principal para transferir essa configuração.");
-            }
-
-            if (dto.principal() && !existente.isPrincipal()) {
-                cartaoCreditoRepository.removerFlagPrincipalDeOutrosCartoes(id);
-            }
-            existente.setPrincipal(dto.principal());
+            existente.atualizarPrincipal(dto.principal());
         }
 
         if (dto.ativo() != null) {
-            if (existente.isPrincipal() && !dto.ativo()) {
-                throw new RegraNegocioException("Não é possível inativar o cartão principal. Defina outro cartão como principal antes de inativá-lo.");
-            }
-            existente.setAtivo(dto.ativo());
+            existente.atualizarAtivo(dto.ativo());
         }
+
+        if (promoverAPrincipal) {
+            cartaoCreditoRepository.removerFlagPrincipalDeOutrosCartoes(id);
+            existente = buscarEntidadePorId(id);
+            existente.atualizarPrincipal(true);
+            if (dto.ativo() != null) {
+                existente.atualizarAtivo(dto.ativo());
+            }
+        }
+
+        cartaoCreditoMapper.atualizarEntidade(dto, existente);
 
         CartaoCredito salvo = cartaoCreditoRepository.save(existente);
         return montarResponseComLimites(salvo);
@@ -113,23 +144,15 @@ public class CartaoCreditoService {
 
     @Transactional
     public void inativar(Long id) {
-        CartaoCredito existente = cartaoCreditoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Cartão de crédito não encontrado."));
-
-        if (existente.isPrincipal()) {
-            throw new RegraNegocioException("Não é possível inativar o cartão principal. Defina outro cartão como principal antes de inativá-lo.");
-        }
-
-        existente.setAtivo(false);
+        CartaoCredito existente = buscarEntidadePorId(id);
+        existente.inativar();
         cartaoCreditoRepository.save(existente);
     }
 
     @Transactional
     public void ativar(Long id) {
-        CartaoCredito existente = cartaoCreditoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Cartão de crédito não encontrado."));
-
-        existente.setAtivo(true);
+        CartaoCredito existente = buscarEntidadePorId(id);
+        existente.ativar();
         cartaoCreditoRepository.save(existente);
     }
 
@@ -142,9 +165,7 @@ public class CartaoCreditoService {
             throw new RegraNegocioException("Não é possível excluir o cartão de crédito, pois existem faturas ou lançamentos vinculados a ele.");
         }
 
-        if (existente.isPrincipal()) {
-            throw new RegraNegocioException("Não é possível excluir o cartão principal. Defina outro cartão como principal antes de excluí-lo.");
-        }
+        existente.validarExclusao();
 
         cartaoCreditoRepository.delete(existente);
     }
@@ -157,12 +178,18 @@ public class CartaoCreditoService {
         }
     }
 
+    private BigDecimal obterLimiteUtilizado(Long cartaoId) {
+        BigDecimal limiteUtilizado = faturaRepository.somarLimiteUtilizadoPorCartao(cartaoId);
+        return (limiteUtilizado != null) ? limiteUtilizado : BigDecimal.ZERO;
+    }
+
     private CartaoCreditoResponseDTO montarResponseComLimites(CartaoCredito cartao) {
-        BigDecimal limiteUtilizado = faturaRepository.somarLimiteUtilizadoPorCartao(cartao.getId());
-        if (limiteUtilizado == null) {
-            limiteUtilizado = BigDecimal.ZERO;
-        }
-        BigDecimal limiteDisponivel = cartao.getLimiteTotal().subtract(limiteUtilizado);
+        BigDecimal limiteUtilizado = obterLimiteUtilizado(cartao.getId());
+        return montarResponseComLimite(cartao, limiteUtilizado);
+    }
+
+    private CartaoCreditoResponseDTO montarResponseComLimite(CartaoCredito cartao, BigDecimal limiteUtilizado) {
+        BigDecimal limiteDisponivel = cartao.calcularLimiteDisponivel(limiteUtilizado);
         return cartaoCreditoMapper.toResponseDTO(cartao, limiteUtilizado, limiteDisponivel);
     }
 }
