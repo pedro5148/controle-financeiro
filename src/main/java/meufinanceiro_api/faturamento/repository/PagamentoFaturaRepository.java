@@ -1,8 +1,10 @@
 package meufinanceiro_api.faturamento.repository;
 
+import jakarta.persistence.LockModeType;
 import meufinanceiro_api.faturamento.domain.PagamentoFatura;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -20,6 +22,13 @@ public interface PagamentoFaturaRepository extends JpaRepository<PagamentoFatura
 
     @EntityGraph(attributePaths = {"fatura", "conta"})
     Optional<PagamentoFatura> findByIdAndFaturaId(Long id, Long faturaId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM PagamentoFatura p WHERE p.id = :id AND p.fatura.id = :faturaId")
+    Optional<PagamentoFatura> findByIdAndFaturaIdForUpdate(@Param("id") Long id, @Param("faturaId") Long faturaId);
+
+    @Query("SELECT COALESCE(SUM(p.valor), 0) FROM PagamentoFatura p WHERE p.fatura.id = :faturaId")
+    BigDecimal somarValorPorFaturaId(@Param("faturaId") Long faturaId);
 
     Optional<PagamentoFatura> findFirstByFaturaIdOrderByDataPagamentoDescIdDesc(Long faturaId);
 

@@ -1,9 +1,11 @@
 package meufinanceiro_api.faturamento.repository;
 
+import jakarta.persistence.LockModeType;
 import meufinanceiro_api.faturamento.domain.Fatura;
 import meufinanceiro_api.faturamento.enums.StatusFatura;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -18,6 +20,10 @@ public interface FaturaRepository extends JpaRepository<Fatura, Long> {
 
     @EntityGraph(attributePaths = {"cartao"})
     Optional<Fatura> findById(Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT f FROM Fatura f WHERE f.id = :id")
+    Optional<Fatura> findByIdForUpdate(@Param("id") Long id);
 
     @EntityGraph(attributePaths = {"cartao"})
     Optional<Fatura> findByCartaoIdAndMesAno(Long cartaoId, String mesAno);

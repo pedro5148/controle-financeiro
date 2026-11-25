@@ -52,15 +52,29 @@ public class GlobalExceptionHandler {
         return new StandardError(400, "Erro de Payload", mensagemAmigavel, null);
     }
 
-    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    @ExceptionHandler(ConflitoNegocioException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
-    public StandardError handleOptimisticLocking(org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+    public StandardError handleConflitoNegocio(ConflitoNegocioException ex) {
+        return new StandardError(409, "Conflito", ex.getMessage(), null);
+    }
+
+    @ExceptionHandler({
+            org.springframework.orm.ObjectOptimisticLockingFailureException.class,
+            org.springframework.dao.PessimisticLockingFailureException.class
+    })
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public StandardError handleLockingFailure(Exception ex) {
         return new StandardError(409, "Conflito de Concorrência", "Este registro foi alterado simultaneamente por outra transação. Recarregue os dados e tente novamente.", null);
     }
 
     @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public StandardError handleDataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException ex) {
-        return new StandardError(400, "Violação de Integridade", "A operação não pode ser concluída pois o registro está vinculado a outros recursos do sistema.", null);
+    public org.springframework.http.ResponseEntity<StandardError> handleDataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException ex) {
+        String detalhe = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
+        if (detalhe != null && detalhe.toLowerCase().contains("uk_correcoes_faturas_chave_idempotencia")) {
+            return org.springframework.http.ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new StandardError(409, "Conflito", "Esta correção já foi processada anteriormente (chave de idempotência duplicada).", null));
+        }
+        return org.springframework.http.ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new StandardError(400, "Violação de Integridade", "A operação não pode ser concluída pois o registro está vinculado a outros recursos do sistema.", null));
     }
 }

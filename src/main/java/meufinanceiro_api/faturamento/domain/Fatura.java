@@ -141,8 +141,8 @@ public class Fatura {
         BigDecimal pagoAtual = (this.valorPago != null) ? this.valorPago : BigDecimal.ZERO;
         this.valorPago = pagoAtual.add(valor);
 
-        // Se a fatura não estiver ABERTA e o saldo restante zerou, passa automaticamente para PAGA
-        if (!isAberta() && getSaldoRestante().compareTo(BigDecimal.ZERO) == 0) {
+        // Quando o saldo restante zerar, a fatura passa automaticamente para PAGA
+        if (getSaldoRestante().compareTo(BigDecimal.ZERO) == 0) {
             this.status = StatusFatura.PAGA;
         }
     }
@@ -153,6 +153,39 @@ public class Fatura {
         this.valorPago = novoValorPago.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : novoValorPago;
 
         if (this.status == StatusFatura.PAGA && getSaldoRestante().compareTo(BigDecimal.ZERO) > 0) {
+            this.status = StatusFatura.FECHADA;
+        }
+    }
+
+    public void validarPagaParaCorrecao() {
+        if (this.status != StatusFatura.PAGA) {
+            throw new RegraNegocioException(
+                    "A correção de fatura paga só pode ser realizada em faturas com status PAGA. Status atual da fatura "
+                            + this.mesAno + ": " + this.status + "."
+            );
+        }
+    }
+
+    public void aplicarRecalculoCorrecao(BigDecimal novoValorTotal, BigDecimal novoValorPago) {
+        BigDecimal total = (novoValorTotal != null) ? novoValorTotal : BigDecimal.ZERO;
+        BigDecimal pago = (novoValorPago != null) ? novoValorPago : BigDecimal.ZERO;
+
+        if (total.compareTo(BigDecimal.ZERO) < 0 || pago.compareTo(BigDecimal.ZERO) < 0) {
+            throw new RegraNegocioException("Os valores recalculados da fatura não podem ser negativos.");
+        }
+        if (pago.compareTo(total) > 0) {
+            throw new RegraNegocioException(
+                    String.format("O total pago (R$ %s) não pode ser maior que o novo valor total da fatura (R$ %s).",
+                            pago, total)
+            );
+        }
+
+        this.valorTotal = total;
+        this.valorPago = pago;
+
+        if (total.compareTo(BigDecimal.ZERO) > 0 && getSaldoRestante().compareTo(BigDecimal.ZERO) == 0) {
+            this.status = StatusFatura.PAGA;
+        } else {
             this.status = StatusFatura.FECHADA;
         }
     }

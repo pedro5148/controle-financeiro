@@ -4,10 +4,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import meufinanceiro_api.faturamento.dto.CorrecaoFaturaHistoricoResponseDTO;
+import meufinanceiro_api.faturamento.dto.CorrecaoFaturaResponseDTO;
+import meufinanceiro_api.faturamento.dto.CorrigirFaturaPagaRequestDTO;
 import meufinanceiro_api.faturamento.dto.FaturaResponseDTO;
 import meufinanceiro_api.faturamento.dto.PagamentoFaturaRequestDTO;
 import meufinanceiro_api.faturamento.dto.PagamentoFaturaResponseDTO;
 import meufinanceiro_api.faturamento.enums.StatusFatura;
+import meufinanceiro_api.faturamento.service.CorrecaoFaturaService;
 import meufinanceiro_api.faturamento.service.FaturaService;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +25,7 @@ import java.util.List;
 public class FaturaController {
 
     private final FaturaService faturaService;
+    private final CorrecaoFaturaService correcaoFaturaService;
 
     @Operation(summary = "Listar faturas", description = "Lista as faturas ordenadas por data de vencimento decrescente, permitindo filtrar por cartão, competência (MM/yyyy) e status.")
     @GetMapping
@@ -49,7 +54,7 @@ public class FaturaController {
         return faturaService.reabrirFatura(id);
     }
 
-    @Operation(summary = "Pagar fatura (total, parcial ou adiantamento)", description = "Registra um pagamento na fatura (mesmo que ABERTA ou parcial), debitando o saldo da conta informada (ou da conta padrão do cartão) e liberando o limite imediatamente. Se a fatura estiver FECHADA e o saldo restante zerar, passa para PAGA e efetiva seus lançamentos.")
+    @Operation(summary = "Pagar fatura (total, parcial ou adiantamento)", description = "Registra um pagamento na fatura (mesmo que ABERTA ou parcial), debitando o saldo da conta informada (ou da conta padrão do cartão) e liberando o limite imediatamente. Quando o saldo restante zerar, a fatura passa automaticamente para PAGA e efetiva seus lançamentos.")
     @PostMapping("/{id}/pagar")
     public FaturaResponseDTO pagar(
             @PathVariable Long id,
@@ -69,6 +74,27 @@ public class FaturaController {
             @PathVariable Long id,
             @PathVariable Long pagamentoId) {
         return faturaService.estornarPagamento(id, pagamentoId);
+    }
+
+    @Operation(
+            summary = "Corrigir fatura paga",
+            description = "Executa em uma única transação a inclusão de uma despesa esquecida diretamente na fatura paga original (sem deslocar para outra fatura e sem criar pagamentos automaticamente). Permite opcionalmente corrigir um pagamento existente (valor, conta e data real), recalculando total da fatura, pagamentos, saldo restante, limite disponível do cartão, status dos lançamentos e registrando o histórico da correção com proteção contra duplicidade e concorrência."
+    )
+    @PostMapping("/{id}/correcoes")
+    public CorrecaoFaturaResponseDTO corrigirFaturaPaga(
+            @PathVariable Long id,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody CorrigirFaturaPagaRequestDTO dto) {
+        return correcaoFaturaService.corrigirFaturaPaga(id, dto, idempotencyKey);
+    }
+
+    @Operation(
+            summary = "Listar histórico de correções da fatura",
+            description = "Retorna o histórico auditável de todas as correções aplicadas à fatura informada."
+    )
+    @GetMapping("/{id}/correcoes")
+    public List<CorrecaoFaturaHistoricoResponseDTO> listarCorrecoes(@PathVariable Long id) {
+        return correcaoFaturaService.listarHistorico(id);
     }
 }
 

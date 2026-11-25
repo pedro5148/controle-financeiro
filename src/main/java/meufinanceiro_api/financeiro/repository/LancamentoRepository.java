@@ -59,6 +59,11 @@ public interface LancamentoRepository extends JpaRepository<Lancamento, Long>, J
 
     List<Lancamento> findAllByFaturaId(Long faturaId);
 
+    @Query("SELECT COALESCE(SUM(l.valor), 0) FROM Lancamento l WHERE l.faturaId = :faturaId")
+    BigDecimal somarValorPorFaturaId(@Param("faturaId") Long faturaId);
+
+    Optional<Lancamento> findByPagamentoFaturaId(Long pagamentoFaturaId);
+
     void deleteByPagamentoFaturaId(Long pagamentoFaturaId);
 
     @Query("""

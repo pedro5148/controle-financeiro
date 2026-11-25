@@ -15,7 +15,8 @@ public record FaturaResponseDTO(
         BigDecimal saldoRestante,
         StatusFatura status,
         LocalDate dataFechamento,
-        LocalDate dataVencimento
+        LocalDate dataVencimento,
+        Long versao
 ) {
 }
 

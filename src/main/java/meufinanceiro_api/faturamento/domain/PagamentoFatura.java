@@ -45,5 +45,9 @@ public class PagamentoFatura {
 
     @Column(columnDefinition = "TEXT")
     private String observacoes;
+
+    @Version
+    @Column(name = "versao", columnDefinition = "bigint default 0")
+    private Long versao = 0L;
 }
 
