@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import meufinanceiro_api.financeiro.dto.EfetivacaoLancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoSugestaoDTO;
@@ -92,12 +93,13 @@ public class LancamentoController {
         return ResponseEntity.ok(lancamentoService.atualizar(id, dto, atualizarPendentesDoGrupo));
     }
 
-    @Operation(summary = "Efetivar lançamento (baixa rápida)", description = "Altera rapidamente o status de um lançamento normal PENDENTE para EFETIVADO, aplicando imediatamente o crédito/débito no saldo da conta bancária.")
+    @Operation(summary = "Efetivar lançamento (baixa rápida)", description = "Altera rapidamente o status de um lançamento normal PENDENTE para EFETIVADO, aplicando imediatamente o crédito/débito no saldo da conta bancária. Permite opcionalmente informar a data de efetivação e atualizar o valor ou a(s) conta(s) no momento da baixa.")
     @PatchMapping("/{id}/efetivar")
     public ResponseEntity<LancamentoResponseDTO> efetivar(
             @PathVariable Long id,
-            @RequestParam(required = false) LocalDate dataEfetivacao) {
-        return ResponseEntity.ok(lancamentoService.efetivar(id, dataEfetivacao));
+            @RequestParam(required = false) LocalDate dataEfetivacao,
+            @Valid @RequestBody(required = false) EfetivacaoLancamentoRequestDTO dto) {
+        return ResponseEntity.ok(lancamentoService.efetivar(id, dataEfetivacao, dto));
     }
 
     @Operation(summary = "Reabrir lançamento para pendente (estornar baixa)", description = "Reverte o status de um lançamento normal EFETIVADO para PENDENTE, estornando automaticamente o valor no saldo da conta bancária.")

@@ -4,8 +4,10 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import meufinanceiro_api.faturamento.domain.CartaoCredito;
 import meufinanceiro_api.faturamento.repository.FaturaRepository;
+import meufinanceiro_api.financeiro.domain.Conta;
 import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.dto.CategoriaResponseDTO;
+import meufinanceiro_api.financeiro.dto.EfetivacaoLancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoSugestaoDTO;
@@ -17,6 +19,7 @@ import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
 import meufinanceiro_api.financeiro.exception.RegraNegocioException;
 import meufinanceiro_api.financeiro.mapper.LancamentoMapper;
+import meufinanceiro_api.financeiro.repository.ContaRepository;
 import meufinanceiro_api.financeiro.repository.LancamentoRepository;
 import meufinanceiro_api.financeiro.repository.LancamentoSpecification;
 import meufinanceiro_api.financeiro.service.strategy.LancamentoStrategy;
@@ -36,6 +39,7 @@ import java.util.List;
 public class LancamentoService {
 
     private final LancamentoRepository lancamentoRepository;
+    private final ContaRepository contaRepository;
     private final FaturaRepository faturaRepository;
     private final LancamentoMapper lancamentoMapper;
     private final List<LancamentoStrategy> lancamentoStrategies;
@@ -193,6 +197,11 @@ public class LancamentoService {
 
     @Transactional
     public LancamentoResponseDTO efetivar(Long id, LocalDate dataEfetivacao) {
+        return efetivar(id, dataEfetivacao, null);
+    }
+
+    @Transactional
+    public LancamentoResponseDTO efetivar(Long id, LocalDate dataEfetivacao, EfetivacaoLancamentoRequestDTO dto) {
         Lancamento lancamento = lancamentoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Lançamento não encontrado."));
 
@@ -210,6 +219,30 @@ public class LancamentoService {
             throw new RegraNegocioException("Este lançamento já se encontra efetivado.");
         }
 
+        if (dto != null) {
+            if (dto.valor() != null) {
+                if (dto.valor().compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new RegraNegocioException("O valor deve ser maior que zero.");
+                }
+                lancamento.setValor(dto.valor());
+            }
+
+            if (dto.contaId() != null) {
+                Conta novaConta = contaRepository.findById(dto.contaId())
+                        .orElseThrow(() -> new EntityNotFoundException("Conta não encontrada"));
+                lancamento.setConta(novaConta);
+            }
+
+            if (dto.contaDestinoId() != null) {
+                if (lancamento.getTipo() != TipoLancamento.TRANSFERENCIA) {
+                    throw new RegraNegocioException("A conta de destino só deve ser informada em lançamentos do tipo TRANSFERENCIA.");
+                }
+                Conta novaContaDestino = contaRepository.findById(dto.contaDestinoId())
+                        .orElseThrow(() -> new EntityNotFoundException("Conta de destino não encontrada"));
+                lancamento.setContaDestino(novaContaDestino);
+            }
+        }
+
         if (lancamento.getConta() == null || !lancamento.getConta().isAtivo()) {
             throw new RegraNegocioException("Não é possível efetivar o lançamento em uma conta inativa ou inexistente.");
         }
@@ -222,13 +255,21 @@ public class LancamentoService {
                 if (lancamento.getContaDestino() == null || !lancamento.getContaDestino().isAtivo()) {
                     throw new RegraNegocioException("Não é possível efetivar a transferência para uma conta de destino inativa ou inexistente.");
                 }
+                if (lancamento.getConta().getId() != null
+                        && lancamento.getConta().getId().equals(lancamento.getContaDestino().getId())) {
+                    throw new RegraNegocioException("A conta de destino deve ser diferente da conta de origem.");
+                }
                 lancamento.getConta().debitar(valor);
                 lancamento.getContaDestino().creditar(valor);
             }
         }
 
+        LocalDate dataEfetivacaoFinal = (dto != null && dto.dataEfetivacao() != null)
+                ? dto.dataEfetivacao()
+                : (dataEfetivacao != null ? dataEfetivacao : LocalDate.now());
+
         lancamento.setStatus(StatusLancamento.EFETIVADO);
-        lancamento.setDataEfetivacao(dataEfetivacao != null ? dataEfetivacao : LocalDate.now());
+        lancamento.setDataEfetivacao(dataEfetivacaoFinal);
 
         Lancamento salvo = lancamentoRepository.saveAndFlush(lancamento);
         return lancamentoMapper.toResponseDTO(salvo);

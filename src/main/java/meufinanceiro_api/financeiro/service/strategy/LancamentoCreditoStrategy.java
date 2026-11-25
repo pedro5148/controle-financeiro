@@ -6,6 +6,7 @@ import meufinanceiro_api.faturamento.service.CartaoCreditoService;
 import meufinanceiro_api.faturamento.service.FaturaService;
 import meufinanceiro_api.financeiro.domain.Lancamento;
 import meufinanceiro_api.financeiro.dto.LancamentoRequestDTO;
+import meufinanceiro_api.financeiro.dto.LancamentoResponseDTO;
 import meufinanceiro_api.financeiro.dto.LancamentoUpdateDTO;
 import meufinanceiro_api.financeiro.enums.StatusLancamento;
 import meufinanceiro_api.financeiro.enums.TipoLancamento;
@@ -18,11 +19,14 @@ import meufinanceiro_api.financeiro.repository.ContaRepository;
 import meufinanceiro_api.financeiro.repository.LancamentoRepository;
 import meufinanceiro_api.financeiro.repository.SubcategoriaRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class LancamentoCreditoStrategy extends AbstractLancamentoStrategy {
@@ -64,12 +68,87 @@ public class LancamentoCreditoStrategy extends AbstractLancamentoStrategy {
     }
 
     @Override
+    @Transactional
+    public LancamentoResponseDTO atualizar(Lancamento lancamentoExistente, LancamentoUpdateDTO dto, boolean atualizarPendentesDoGrupo) {
+        Long cartaoCreditoIdOriginal = lancamentoExistente.getCartaoCreditoId();
+        LocalDate dataLancamentoOriginal = lancamentoExistente.getDataLancamento();
+        Long faturaIdOriginal = lancamentoExistente.getFaturaId();
+        LocalDate dataVencimentoOriginal = lancamentoExistente.getDataVencimento();
+        BigDecimal valorOriginal = lancamentoExistente.getValor();
+
+        boolean recalcularFatura = deveRecalcularFatura(
+                cartaoCreditoIdOriginal,
+                dataLancamentoOriginal,
+                faturaIdOriginal,
+                dto
+        );
+
+        if (recalcularFatura) {
+            // Fase 1: Estorno financeiro da fatura original antes da mutação
+            reverterImpactoFinanceiro(lancamentoExistente);
+        }
+
+        // Fase 2: Mesclagem e validação dos novos dados (preservando metadados de parcelamento)
+        mapper.atualizarEntidade(dto, lancamentoExistente);
+        preencherEntidadesComunsAtualizacao(lancamentoExistente, dto);
+        validarEPreencherRegrasCredito(lancamentoExistente, dto.cartaoCreditoId());
+
+        CartaoCredito cartao = cartaoCreditoService.obterCartaoAtivo(lancamentoExistente.getCartaoCreditoId());
+
+        Lancamento salvo;
+        if (recalcularFatura) {
+            cartaoCreditoService.validarLimiteDisponivel(cartao, lancamentoExistente.getValor());
+            atribuirFaturaRecalculada(lancamentoExistente, cartao);
+            salvo = atualizarESalvarLancamento(lancamentoExistente);
+        } else {
+            Fatura faturaOriginal = faturaService.buscarEntidadePorId(faturaIdOriginal);
+            faturaOriginal.validarAbertaParaMovimentacao();
+
+            lancamentoExistente.setFaturaId(faturaIdOriginal);
+            lancamentoExistente.setDataVencimento(
+                    dataVencimentoOriginal != null ? dataVencimentoOriginal : faturaOriginal.getDataVencimento()
+            );
+
+            BigDecimal diferencaValor = lancamentoExistente.getValor().subtract(valorOriginal);
+            if (diferencaValor.compareTo(BigDecimal.ZERO) > 0) {
+                cartaoCreditoService.validarLimiteDisponivel(cartao, diferencaValor);
+            }
+
+            ajustarValorFaturaPelaDiferenca(faturaIdOriginal, diferencaValor);
+            salvo = repository.save(lancamentoExistente);
+            repository.flush();
+        }
+
+        // Fase 4: Se solicitado e fizer parte de um parcelamento, propaga alterações para as demais parcelas PENDENTES do grupo
+        if (atualizarPendentesDoGrupo && salvo.getGrupoParcelamentoId() != null) {
+            atualizarDemaisParcelasPendentesDoGrupo(salvo, dto);
+        }
+
+        posProcessarAtualizacao(salvo, dto);
+
+        return mapper.toResponseDTO(salvo);
+    }
+
+    @Override
     protected void preencherEntidadesEspecificasAtualizacao(Lancamento lancamento, LancamentoUpdateDTO dto) {
         validarEPreencherRegrasCredito(lancamento, dto.cartaoCreditoId());
 
         CartaoCredito cartao = cartaoCreditoService.obterCartaoAtivo(lancamento.getCartaoCreditoId());
         cartaoCreditoService.validarLimiteDisponivel(cartao, lancamento.getValor());
+        atribuirFaturaRecalculada(lancamento, cartao);
+    }
 
+    private boolean deveRecalcularFatura(
+            Long cartaoCreditoIdOriginal,
+            LocalDate dataLancamentoOriginal,
+            Long faturaIdOriginal,
+            LancamentoUpdateDTO dto) {
+        return faturaIdOriginal == null
+                || !Objects.equals(cartaoCreditoIdOriginal, dto.cartaoCreditoId())
+                || !Objects.equals(dataLancamentoOriginal, dto.dataLancamento());
+    }
+
+    private void atribuirFaturaRecalculada(Lancamento lancamento, CartaoCredito cartao) {
         int offsetMeses = (lancamento.getParcelaAtual() != null && lancamento.getParcelaAtual() > 1)
                 ? lancamento.getParcelaAtual() - 1
                 : 0;
@@ -82,6 +161,15 @@ public class LancamentoCreditoStrategy extends AbstractLancamentoStrategy {
 
         lancamento.setFaturaId(faturaDestino.getId());
         lancamento.setDataVencimento(faturaDestino.getDataVencimento());
+    }
+
+    private void ajustarValorFaturaPelaDiferenca(Long faturaId, BigDecimal diferencaValor) {
+        int comparacao = diferencaValor.compareTo(BigDecimal.ZERO);
+        if (comparacao > 0) {
+            faturaService.adicionarValorNaFatura(faturaId, diferencaValor);
+        } else if (comparacao < 0) {
+            faturaService.removerValorDaFatura(faturaId, diferencaValor.abs());
+        }
     }
 
     private void validarEPreencherRegrasCredito(Lancamento lancamento, Long cartaoCreditoId) {
